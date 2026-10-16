@@ -2,7 +2,13 @@ import tseslint from 'typescript-eslint';
 
 export const base = tseslint.config(
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/node_modules/**', '**/coverage/**'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+      '**/src/generated/prisma/**',
+    ],
   },
   ...tseslint.configs.recommended,
   {

@@ -1,0 +1,197 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum ServiceTier {
+  TIER_0
+  TIER_1
+  TIER_2
+  TIER_3
+}
+
+enum ServiceStatus {
+  OPERATIONAL
+  DEGRADED
+  PARTIAL_OUTAGE
+  MAJOR_OUTAGE
+  MAINTENANCE
+}
+
+enum IncidentSeverity {
+  SEV1
+  SEV2
+  SEV3
+  SEV4
+}
+
+enum IncidentStatus {
+  INVESTIGATING
+  IDENTIFIED
+  MONITORING
+  RESOLVED
+}
+
+enum IncidentEventType {
+  INCIDENT_CREATED
+  STATUS_CHANGED
+  SEVERITY_CHANGED
+  DESCRIPTION_UPDATED
+  MESSAGE_ADDED
+  RESPONDER_ASSIGNED
+  RESPONDER_REMOVED
+  SERVICE_LINKED
+  SERVICE_UNLINKED
+}
+
+model User {
+  id            String       @id @db.Uuid
+  email         String?      @db.VarChar(320)
+  displayName   String?      @map("display_name") @db.VarChar(120)
+  avatarUrl     String?      @map("avatar_url") @db.VarChar(2048)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deactivatedAt DateTime?    @map("deactivated_at") @db.Timestamptz(6)
+  memberships   Membership[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Organization {
+  id                 String       @id @default(uuid()) @db.Uuid
+  name               String       @db.VarChar(120)
+  slug               String       @unique @db.VarChar(80)
+  nextIncidentNumber Int          @default(1) @map("next_incident_number")
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  archivedAt         DateTime?    @map("archived_at") @db.Timestamptz(6)
+  memberships        Membership[]
+  services           Service[]
+  incidents          Incident[]
+
+  @@map("organizations")
+}
+
+model Membership {
+  organizationId     String             @map("organization_id") @db.Uuid
+  userId             String             @map("user_id") @db.Uuid
+  role               OrganizationRole   @default(MEMBER)
+  status             MembershipStatus
+  invitedAt          DateTime?          @map("invited_at") @db.Timestamptz(6)
+  joinedAt           DateTime?          @map("joined_at") @db.Timestamptz(6)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serviceOwnerships  ServiceOwnership[]
+  createdIncidents   Incident[]         @relation("IncidentCreator")
+  commandedIncidents Incident[]         @relation("IncidentCommander")
+  timelineEvents     IncidentEvent[]    @relation("IncidentEventActor")
+
+  @@id([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, status, role])
+  @@map("memberships")
+}
+
+model Service {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  name           String             @db.VarChar(160)
+  slug           String             @db.VarChar(100)
+  description    String?            @db.Text
+  tier           ServiceTier        @default(TIER_2)
+  status         ServiceStatus      @default(OPERATIONAL)
+  runbookUrl     String?            @map("runbook_url") @db.VarChar(2048)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  archivedAt     DateTime?          @map("archived_at") @db.Timestamptz(6)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ownerships     ServiceOwnership[]
+  incidents      Incident[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+  @@map("services")
+}
+
+model ServiceOwnership {
+  organizationId String     @map("organization_id") @db.Uuid
+  serviceId      String     @map("service_id") @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  service        Service    @relation(fields: [organizationId, serviceId], references: [organizationId, id], onDelete: Restrict)
+  membership     Membership @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@id([organizationId, serviceId, userId])
+  @@index([organizationId, userId])
+  @@map("service_ownerships")
+}
+
+model Incident {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  number          Int
+  title           String           @db.VarChar(200)
+  summary         String?          @db.Text
+  status          IncidentStatus   @default(INVESTIGATING)
+  severity        IncidentSeverity @default(SEV3)
+  serviceId       String?          @map("service_id") @db.Uuid
+  createdByUserId String           @map("created_by_user_id") @db.Uuid
+  commanderUserId String?          @map("commander_user_id") @db.Uuid
+  detectedAt      DateTime?        @map("detected_at") @db.Timestamptz(6)
+  startedAt       DateTime         @default(now()) @map("started_at") @db.Timestamptz(6)
+  resolvedAt      DateTime?        @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  service         Service?         @relation(fields: [organizationId, serviceId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       Membership       @relation("IncidentCreator", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  commander       Membership?      @relation("IncidentCommander", fields: [organizationId, commanderUserId], references: [organizationId, userId], onDelete: Restrict)
+  events          IncidentEvent[]
+
+  @@unique([organizationId, number])
+  @@unique([organizationId, id])
+  @@index([organizationId, status, startedAt])
+  @@index([organizationId, severity, status])
+  @@index([organizationId, serviceId, status])
+  @@map("incidents")
+}
+
+model IncidentEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  incidentId     String            @map("incident_id") @db.Uuid
+  actorUserId    String?           @map("actor_user_id") @db.Uuid
+  type           IncidentEventType
+  message        String?           @db.Text
+  details        Json?             @db.JsonB
+  occurredAt     DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  incident       Incident          @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Restrict)
+  actor          Membership?       @relation("IncidentEventActor", fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@index([organizationId, incidentId, occurredAt, id])
+  @@index([organizationId, actorUserId, occurredAt])
+  @@map("incident_events")
+}

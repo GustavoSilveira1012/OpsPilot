@@ -27,3 +27,6 @@ Thumbs.db
 # Codex projectless workspace folders
 /outputs/
 /work/
+
+# Generated Prisma client
+apps/api/src/generated/prisma/

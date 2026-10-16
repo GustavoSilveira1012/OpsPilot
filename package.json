@@ -13,7 +13,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "turbo lint",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @opspilot/api db:generate",
+    "db:validate": "pnpm --filter @opspilot/api db:validate",
+    "db:migrate:deploy": "pnpm --filter @opspilot/api db:migrate:deploy"
   },
   "devDependencies": {
     "eslint": "catalog:",
