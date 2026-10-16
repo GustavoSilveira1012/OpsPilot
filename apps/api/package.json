@@ -1,0 +1,31 @@
+{
+  "name": "@opspilot/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "dev": "nest start --watch",
+    "lint": "eslint src --max-warnings=0",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit --incremental false -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@opspilot/contracts": "workspace:*",
+    "dotenv": "catalog:",
+    "helmet": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "catalog:",
+    "@opspilot/eslint-config": "workspace:*",
+    "@opspilot/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

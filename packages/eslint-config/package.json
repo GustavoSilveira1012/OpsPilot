@@ -1,0 +1,14 @@
+{
+  "name": "@opspilot/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.mjs",
+    "./next": "./next.mjs"
+  },
+  "dependencies": {
+    "eslint-config-next": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}
