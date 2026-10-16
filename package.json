@@ -1,0 +1,28 @@
+{
+  "name": "opspilot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "clean": "node ./scripts/clean.mjs",
+    "dev": "turbo dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @opspilot/api db:generate",
+    "db:validate": "pnpm --filter @opspilot/api db:validate",
+    "db:migrate:deploy": "pnpm --filter @opspilot/api db:migrate:deploy"
+  },
+  "devDependencies": {
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "turbo": "catalog:"
+  }
+}

@@ -1,1 +1,33 @@
 node_modules
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Environment files (keep examples tracked)
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Logs and local state
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editor and operating system files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Codex projectless workspace folders
+/outputs/
+/work/
+
+# Generated Prisma client
+apps/api/src/generated/prisma/
