@@ -92,20 +92,22 @@ model Organization {
 }
 
 model Membership {
-  organizationId     String             @map("organization_id") @db.Uuid
-  userId             String             @map("user_id") @db.Uuid
-  role               OrganizationRole   @default(MEMBER)
-  status             MembershipStatus
-  invitedAt          DateTime?          @map("invited_at") @db.Timestamptz(6)
-  joinedAt           DateTime?          @map("joined_at") @db.Timestamptz(6)
-  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  user               User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  serviceOwnerships  ServiceOwnership[]
-  createdIncidents   Incident[]         @relation("IncidentCreator")
-  commandedIncidents Incident[]         @relation("IncidentCommander")
-  timelineEvents     IncidentEvent[]    @relation("IncidentEventActor")
+  organizationId      String              @map("organization_id") @db.Uuid
+  userId              String              @map("user_id") @db.Uuid
+  role                OrganizationRole    @default(MEMBER)
+  status              MembershipStatus
+  invitedAt           DateTime?           @map("invited_at") @db.Timestamptz(6)
+  joinedAt            DateTime?           @map("joined_at") @db.Timestamptz(6)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serviceOwnerships   ServiceOwnership[]
+  createdIncidents    Incident[]          @relation("IncidentCreator")
+  commandedIncidents  Incident[]          @relation("IncidentCommander")
+  timelineEvents      IncidentEvent[]     @relation("IncidentEventActor")
+  respondingIncidents IncidentResponder[] @relation("IncidentResponderUser")
+  assignedResponders  IncidentResponder[] @relation("IncidentResponderAssigner")
 
   @@id([organizationId, userId])
   @@index([userId, status])
@@ -149,25 +151,26 @@ model ServiceOwnership {
 }
 
 model Incident {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @map("organization_id") @db.Uuid
+  id              String              @id @default(uuid()) @db.Uuid
+  organizationId  String              @map("organization_id") @db.Uuid
   number          Int
-  title           String           @db.VarChar(200)
-  summary         String?          @db.Text
-  status          IncidentStatus   @default(INVESTIGATING)
-  severity        IncidentSeverity @default(SEV3)
-  serviceId       String?          @map("service_id") @db.Uuid
-  createdByUserId String           @map("created_by_user_id") @db.Uuid
-  commanderUserId String?          @map("commander_user_id") @db.Uuid
-  detectedAt      DateTime?        @map("detected_at") @db.Timestamptz(6)
-  startedAt       DateTime         @default(now()) @map("started_at") @db.Timestamptz(6)
-  resolvedAt      DateTime?        @map("resolved_at") @db.Timestamptz(6)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  service         Service?         @relation(fields: [organizationId, serviceId], references: [organizationId, id], onDelete: Restrict)
-  createdBy       Membership       @relation("IncidentCreator", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
-  commander       Membership?      @relation("IncidentCommander", fields: [organizationId, commanderUserId], references: [organizationId, userId], onDelete: Restrict)
+  title           String              @db.VarChar(200)
+  summary         String?             @db.Text
+  status          IncidentStatus      @default(INVESTIGATING)
+  severity        IncidentSeverity    @default(SEV3)
+  serviceId       String?             @map("service_id") @db.Uuid
+  createdByUserId String              @map("created_by_user_id") @db.Uuid
+  commanderUserId String?             @map("commander_user_id") @db.Uuid
+  detectedAt      DateTime?           @map("detected_at") @db.Timestamptz(6)
+  startedAt       DateTime            @default(now()) @map("started_at") @db.Timestamptz(6)
+  resolvedAt      DateTime?           @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  service         Service?            @relation(fields: [organizationId, serviceId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       Membership          @relation("IncidentCreator", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  commander       Membership?         @relation("IncidentCommander", fields: [organizationId, commanderUserId], references: [organizationId, userId], onDelete: Restrict)
+  responders      IncidentResponder[]
   events          IncidentEvent[]
 
   @@unique([organizationId, number])
@@ -176,6 +179,22 @@ model Incident {
   @@index([organizationId, severity, status])
   @@index([organizationId, serviceId, status])
   @@map("incidents")
+}
+
+model IncidentResponder {
+  organizationId   String      @map("organization_id") @db.Uuid
+  incidentId       String      @map("incident_id") @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  assignedByUserId String?     @map("assigned_by_user_id") @db.Uuid
+  assignedAt       DateTime    @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  removedAt        DateTime?   @map("removed_at") @db.Timestamptz(6)
+  incident         Incident    @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Restrict)
+  responder        Membership  @relation("IncidentResponderUser", fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+  assignedBy       Membership? @relation("IncidentResponderAssigner", fields: [organizationId, assignedByUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@id([organizationId, incidentId, userId])
+  @@index([organizationId, userId, removedAt])
+  @@map("incident_responders")
 }
 
 model IncidentEvent {

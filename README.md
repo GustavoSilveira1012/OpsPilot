@@ -1,6 +1,6 @@
 # OpsPilot
 
-OpsPilot is a full-stack engineering project for helping enterprise teams coordinate software incidents, ownership, updates, and follow-up work. Sprint 1, task OPS-001, establishes the monorepo foundation; product workflows will be added in later tasks.
+OpsPilot is a full-stack engineering project for helping enterprise teams coordinate software incidents, ownership, updates, and follow-up work. Sprint 1 tasks OPS-001 and OPS-002 establish the monorepo and PostgreSQL foundations; product workflows will be added in later tasks.
 
 ## Repository layout
 

@@ -30,6 +30,6 @@ The dependency direction is apps → shared packages. Shared packages must not i
 - PostgreSQL is the system of record for OpsPilot application data.
 - Prisma ORM 7.10 uses `@prisma/adapter-pg`; `prisma.config.ts` supplies a direct URL to CLI operations while the API client reads `DATABASE_URL`.
 - `User.id` is the UUID issued by Supabase Auth. Passwords and provider tokens are owned by Supabase Auth and are not stored in the application schema.
-- Organization-scoped records include `organizationId`. Composite foreign keys keep service ownership, incidents, and timeline events within one organization.
+- Organization-scoped records include `organizationId`. Composite foreign keys keep service ownership, incident responder assignments, incidents, and timeline events within one organization.
 - Memberships and services are soft-deactivated or archived so historical incident records keep their ownership context.
-- The initial schema covers users, organizations, memberships, services, incidents, and incident timeline events. API authorization and row-level access rules are added with authentication.
+- The initial schema covers users, organizations, memberships, services, incidents, active responder assignments, and incident timeline events. API authorization and row-level access rules are added with authentication.

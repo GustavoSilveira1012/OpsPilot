@@ -111,6 +111,18 @@ CREATE TABLE "incidents" (
 );
 
 -- CreateTable
+CREATE TABLE "incident_responders" (
+    "organization_id" UUID NOT NULL,
+    "incident_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "assigned_by_user_id" UUID,
+    "assigned_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "removed_at" TIMESTAMPTZ(6),
+
+    CONSTRAINT "incident_responders_pkey" PRIMARY KEY ("organization_id","incident_id","user_id")
+);
+
+-- CreateTable
 CREATE TABLE "incident_events" (
     "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
@@ -165,6 +177,9 @@ CREATE UNIQUE INDEX "incidents_organization_id_number_key" ON "incidents"("organ
 CREATE UNIQUE INDEX "incidents_organization_id_id_key" ON "incidents"("organization_id", "id");
 
 -- CreateIndex
+CREATE INDEX "incident_responders_organization_id_user_id_removed_at_idx" ON "incident_responders"("organization_id", "user_id", "removed_at");
+
+-- CreateIndex
 CREATE INDEX "incident_events_organization_id_incident_id_occurred_at_id_idx" ON "incident_events"("organization_id", "incident_id", "occurred_at", "id");
 
 -- CreateIndex
@@ -196,6 +211,15 @@ ALTER TABLE "incidents" ADD CONSTRAINT "incidents_organization_id_created_by_use
 
 -- AddForeignKey
 ALTER TABLE "incidents" ADD CONSTRAINT "incidents_organization_id_commander_user_id_fkey" FOREIGN KEY ("organization_id", "commander_user_id") REFERENCES "memberships"("organization_id", "user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "incident_responders" ADD CONSTRAINT "incident_responders_organization_id_incident_id_fkey" FOREIGN KEY ("organization_id", "incident_id") REFERENCES "incidents"("organization_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "incident_responders" ADD CONSTRAINT "incident_responders_organization_id_user_id_fkey" FOREIGN KEY ("organization_id", "user_id") REFERENCES "memberships"("organization_id", "user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "incident_responders" ADD CONSTRAINT "incident_responders_organization_id_assigned_by_user_id_fkey" FOREIGN KEY ("organization_id", "assigned_by_user_id") REFERENCES "memberships"("organization_id", "user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "incident_events" ADD CONSTRAINT "incident_events_organization_id_incident_id_fkey" FOREIGN KEY ("organization_id", "incident_id") REFERENCES "incidents"("organization_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
