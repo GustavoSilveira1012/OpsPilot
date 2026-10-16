@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "dev": "nest start --watch",
+    "dev": "prisma generate && nest start --watch",
     "lint": "eslint src --max-warnings=0",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit --incremental false -p tsconfig.build.json"
+    "typecheck": "prisma generate && tsc --noEmit --incremental false -p tsconfig.build.json",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "catalog:",
@@ -19,13 +24,17 @@
     "dotenv": "catalog:",
     "helmet": "catalog:",
     "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "rxjs": "catalog:",
+    "@prisma/adapter-pg": "catalog:",
+    "@prisma/client": "catalog:",
+    "pg": "catalog:"
   },
   "devDependencies": {
     "@nestjs/cli": "catalog:",
     "@opspilot/eslint-config": "workspace:*",
     "@opspilot/tsconfig": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "prisma": "catalog:"
   }
 }
