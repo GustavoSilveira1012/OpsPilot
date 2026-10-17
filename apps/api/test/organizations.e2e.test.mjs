@@ -103,6 +103,7 @@ test('JWT signatures, expiry, issuer, audience and user role are verified', asyn
   for (const bearer of [
     token(ownerId, {}, otherKey),
     token(ownerId, { exp: 1 }),
+    token(ownerId, { exp: undefined }),
     token(ownerId, { iss: 'https://untrusted.example/auth/v1' }),
     token(ownerId, { aud: 'another-api' }),
     token(ownerId, { nbf: Math.floor(Date.now() / 1000) + 3600 }),
@@ -135,9 +136,8 @@ test('onboarding atomically creates the organization, verified profile and activ
   assert.equal(response.status, 201);
   assert.match(response.headers.get('cache-control'), /no-store/);
   organization = await response.json();
-  assert.deepEqual(Object.keys(organization).sort(), ['id', 'name', 'role', 'slug']);
+  assert.deepEqual(Object.keys(organization).sort(), ['id', 'name', 'slug']);
   assert.equal(organization.name, 'Acme Engineering');
-  assert.equal(organization.role, 'OWNER');
   const membership = await prisma.membership.findUnique({
     where: { organizationId_userId: { organizationId: organization.id, userId: ownerId } },
   });
@@ -149,8 +149,8 @@ test('onboarding atomically creates the organization, verified profile and activ
     `${ownerId}@example.test`,
   );
   assert.deepEqual(
-    await (await request('GET', `/organizations/${slug}`, token(ownerId))).json(),
-    organization,
+    await (await request('GET', `/organizations/${slug}/membership`, token(ownerId))).json(),
+    { organization, role: 'OWNER' },
   );
 });
 
@@ -180,7 +180,10 @@ test('competing workspace creation preserves uniqueness and rolls back the losin
 });
 
 test('other tenants and INVITED, SUSPENDED or REMOVED memberships cannot read the workspace', async () => {
-  assert.equal((await request('GET', `/organizations/${slug}`, token(outsiderId))).status, 404);
+  assert.equal(
+    (await request('GET', `/organizations/${slug}/membership`, token(outsiderId))).status,
+    404,
+  );
   await prisma.user.create({ data: { id: outsiderId } });
   await prisma.membership.create({
     data: {
@@ -195,14 +198,17 @@ test('other tenants and INVITED, SUSPENDED or REMOVED memberships cannot read th
       where: { organizationId_userId: { userId: outsiderId, organizationId: organization.id } },
       data: { status },
     });
-    assert.equal((await request('GET', `/organizations/${slug}`, token(outsiderId))).status, 404);
+    assert.equal(
+      (await request('GET', `/organizations/${slug}/membership`, token(outsiderId))).status,
+      404,
+    );
     assert.deepEqual(await (await request('GET', '/organizations', token(outsiderId))).json(), []);
   }
   await prisma.membership.update({
     where: { organizationId_userId: { userId: outsiderId, organizationId: organization.id } },
     data: { status: 'ACTIVE' },
   });
-  const response = await request('GET', `/organizations/${slug}`, token(outsiderId));
+  const response = await request('GET', `/organizations/${slug}/membership`, token(outsiderId));
   assert.equal(response.status, 200);
   assert.equal((await response.json()).role, 'MEMBER');
 });
@@ -212,10 +218,16 @@ test('archived workspaces and deactivated users cannot access tenant data', asyn
     where: { id: organization.id },
     data: { archivedAt: new Date() },
   });
-  assert.equal((await request('GET', `/organizations/${slug}`, token(ownerId))).status, 404);
+  assert.equal(
+    (await request('GET', `/organizations/${slug}/membership`, token(ownerId))).status,
+    404,
+  );
   await prisma.organization.update({ where: { id: organization.id }, data: { archivedAt: null } });
   await prisma.user.update({ where: { id: ownerId }, data: { deactivatedAt: new Date() } });
-  assert.equal((await request('GET', `/organizations/${slug}`, token(ownerId))).status, 404);
+  assert.equal(
+    (await request('GET', `/organizations/${slug}/membership`, token(ownerId))).status,
+    404,
+  );
   assert.equal(
     (
       await request('POST', '/organizations', token(ownerId), {
@@ -254,12 +266,12 @@ test('logout denies replayed and refreshed access tokens while a new sign-in rem
   assert.equal((await request('GET', '/organizations', bearer)).status, 200);
   assert.equal((await request('POST', '/auth/logout', bearer)).status, 204);
   assert.equal((await request('GET', '/organizations', bearer)).status, 401);
-  assert.equal((await request('GET', `/organizations/${slug}`, bearer)).status, 401);
+  assert.equal((await request('GET', `/organizations/${slug}/membership`, bearer)).status, 401);
   assert.equal((await request('POST', '/auth/logout', bearer)).status, 401);
   const refreshed = token(outsiderId, { exp: Math.floor(Date.now() / 1000) + 3600 });
   assert.equal((await request('GET', '/organizations', refreshed)).status, 401);
   const newSignIn = token(outsiderId, { session_id: randomUUID() });
-  assert.equal((await request('GET', `/organizations/${slug}`, newSignIn)).status, 200);
+  assert.equal((await request('GET', `/organizations/${slug}/membership`, newSignIn)).status, 200);
 });
 
 test('a user without an application profile can revoke their session before onboarding', async () => {

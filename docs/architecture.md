@@ -14,6 +14,8 @@ OpsPilot is an incident coordination platform for engineering teams. The first r
 
 The dependency direction is apps → shared packages. Shared packages must not import from applications. The web app calls the API over HTTP and uses Supabase only for Auth; it does not connect directly to the application database.
 
+The identity/authorization decision is recorded in [ADR 0001](adr/0001-identity-and-authorization.md): Supabase owns identity, NestJS owns access decisions, and the OPS-002 Prisma schema owns application records.
+
 ## Initial API contract
 
 `GET /api/v1/health` is a public liveness endpoint returning `HealthResponse` from `@opspilot/contracts`. Startup validates Auth configuration and connects Prisma; the liveness handler itself does not query the database. Organization API contracts and authorization behavior are documented in [OPS-003](ops-003.md).

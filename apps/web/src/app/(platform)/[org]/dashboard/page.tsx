@@ -1,36 +1,39 @@
 import type { Metadata } from 'next';
-import { getOrganization } from '@/lib/api/server';
+import { getOrganizationMembership } from '@/lib/organizations';
+import styles from '../workspace.module.css';
 
 export const metadata: Metadata = { title: 'Dashboard | OpsPilot' };
 
-export default async function DashboardPage({ params }: { params: Promise<{ org: string }> }) {
-  // Pages/data operations also authorize access: layouts can be reused during navigation.
+export default async function DashboardPage({ params }: PageProps<'/[org]/dashboard'>) {
   const { org } = await params;
-  const organization = await getOrganization(org);
+  const { organization, role } = await getOrganizationMembership(org);
+
   return (
     <>
-      <header className="dashboard-header">
+      <header className={styles.header}>
         <div>
-          <p className="eyebrow">{organization.name}</p>
+          <p className={styles.eyebrow}>{organization.name}</p>
           <h1>Dashboard</h1>
         </div>
-        <span className="workspace-badge">Workspace ready</span>
+        <span className={styles.badge}>Workspace ready</span>
       </header>
-      <section className="dashboard-welcome" aria-labelledby="welcome-title">
-        <span className="welcome-mark" aria-hidden="true">
+      <section className={styles.welcome} aria-labelledby="welcome-title">
+        <span className={styles.welcomeMark} aria-hidden="true">
           ✓
         </span>
-        <p className="eyebrow">A CLEAR START</p>
+        <p className={styles.eyebrow}>A CLEAR START</p>
         <h2 id="welcome-title">Your response workspace is ready.</h2>
-        <p>This is your team’s home for coordinating incidents and keeping ownership clear.</p>
-        <dl className="workspace-details">
+        <p className={styles.description}>
+          This is your team’s home for coordinating incidents and keeping ownership clear.
+        </p>
+        <dl className={styles.details}>
           <div>
             <dt>Workspace</dt>
             <dd>{organization.slug}</dd>
           </div>
           <div>
             <dt>Your role</dt>
-            <dd className="role-value">{organization.role.toLowerCase()}</dd>
+            <dd className={styles.role}>{role.toLowerCase()}</dd>
           </div>
         </dl>
       </section>

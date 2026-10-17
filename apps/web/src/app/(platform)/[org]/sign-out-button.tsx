@@ -2,14 +2,17 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { getApiBaseUrl } from '@/lib/api/config';
 import { createClient } from '@/lib/supabase/client';
+import { apiBaseUrl } from '@/lib/api';
+import styles from './workspace.module.css';
 
 export function SignOutButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+
   async function signOut() {
+    if (pending) return;
     setPending(true);
     setError('');
     try {
@@ -17,11 +20,10 @@ export function SignOutButton() {
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
       if (data.session) {
-        const response = await fetch(`${getApiBaseUrl()}/auth/logout`, {
+        const response = await fetch(`${apiBaseUrl}/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${data.session.access_token}` },
         });
-        // A revoked/expired session is already denied by the API.
         if (!response.ok && response.status !== 401) throw new Error('Session revocation failed.');
       }
       const { error: authError } = await supabase.auth.signOut({ scope: 'local' });
@@ -34,12 +36,17 @@ export function SignOutButton() {
       setPending(false);
     }
   }
+
   return (
-    <div className="sign-out">
-      <button className="text-button" type="button" disabled={pending} onClick={signOut}>
+    <div>
+      <button className={styles.signOut} type="button" disabled={pending} onClick={signOut}>
         {pending ? 'Signing out…' : 'Sign out'}
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

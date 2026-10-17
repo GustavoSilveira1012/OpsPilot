@@ -1,45 +1,48 @@
-import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Brand } from '@/components/brand';
-import { SignOutButton } from '@/components/sign-out-button';
-import { getOrganization } from '@/lib/api/server';
+import { getOrganizationMembership } from '@/lib/organizations';
+import { SignOutButton } from './sign-out-button';
+import styles from './workspace.module.css';
 
-export default async function OrganizationLayout({
-  children,
-  params,
-}: {
-  children: ReactNode;
-  params: Promise<{ org: string }>;
-}) {
+export default async function OrganizationLayout({ children, params }: LayoutProps<'/[org]'>) {
   const { org } = await params;
-  const organization = await getOrganization(org);
+  const { organization, role } = await getOrganizationMembership(org);
+
   return (
-    <div className="platform-shell">
-      <aside className="platform-sidebar">
-        <Brand />
-        <div className="workspace-identity">
-          <span className="workspace-avatar" aria-hidden="true">
+    <div className={styles.shell}>
+      <aside className={styles.sidebar}>
+        <Link aria-label="OpsPilot home" className="brand" href="/">
+          <span aria-hidden="true" className="brand-mark">
+            O
+          </span>
+          <span>OpsPilot</span>
+        </Link>
+        <div className={styles.identity}>
+          <span className={styles.avatar} aria-hidden="true">
             {organization.name[0]}
           </span>
           <div>
             <strong>{organization.name}</strong>
-            <span>{organization.role.toLowerCase()}</span>
+            <span>{role.toLowerCase()}</span>
           </div>
         </div>
-        <nav aria-label="Workspace">
-          <Link className="sidebar-link" href={`/${organization.slug}/dashboard`}>
+        <nav aria-label="Workspace" className={styles.navigation}>
+          <Link
+            className={styles.activeLink}
+            aria-current="page"
+            href={`/${organization.slug}/dashboard`}
+          >
             Dashboard
           </Link>
-          <Link className="sidebar-secondary" href="/onboarding">
+          <Link className={styles.secondaryLink} href="/onboarding">
             Switch workspace
           </Link>
         </nav>
-        <div className="sidebar-bottom">
+        <div className={styles.sidebarBottom}>
           <SignOutButton />
           <p>Ready for the unexpected.</p>
         </div>
       </aside>
-      <main className="platform-content">{children}</main>
+      <main className={styles.content}>{children}</main>
     </div>
   );
 }

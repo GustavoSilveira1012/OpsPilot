@@ -22,7 +22,6 @@
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@opspilot/contracts": "workspace:*",
-    "@supabase/supabase-js": "2.118.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "dotenv": "catalog:",
@@ -31,7 +30,8 @@
     "rxjs": "catalog:",
     "@prisma/adapter-pg": "catalog:",
     "@prisma/client": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@nestjs/cli": "catalog:",

@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { authRedirect } from '@/lib/supabase/redirect';
 import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
@@ -7,12 +8,7 @@ export async function GET(request: NextRequest) {
   if (tokenHash && (type === 'email' || type === 'signup')) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-    if (!error)
-      return NextResponse.redirect(new URL('/onboarding', request.url), {
-        headers: { 'Cache-Control': 'private, no-store' },
-      });
+    if (!error) return authRedirect('/onboarding');
   }
-  return NextResponse.redirect(new URL('/login?error=confirmation', request.url), {
-    headers: { 'Cache-Control': 'private, no-store' },
-  });
+  return authRedirect('/login?error=confirmation');
 }

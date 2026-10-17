@@ -15,6 +15,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test:integration": "pnpm --filter @opspilot/api test:integration",
+    "test:platform": "node scripts/test-platform.mjs",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @opspilot/api db:generate",

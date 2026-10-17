@@ -70,3 +70,8 @@ jobs:
         run: pnpm test:integration
         env:
           TEST_DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public
+
+      - name: Check protected pages, confirmation and session refresh
+        run: pnpm test:platform
+        env:
+          TEST_DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public

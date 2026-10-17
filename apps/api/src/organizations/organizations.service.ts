@@ -5,72 +5,93 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { OrganizationSummary } from '@opspilot/contracts';
+import type { OrganizationMembershipResponse, OrganizationSummary } from '@opspilot/contracts';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { AuthIdentity } from '../auth/auth.types.js';
-import type { CreateOrganizationDto } from './create-organization.dto.js';
+import type { AuthenticatedUser } from '../auth/supabase-auth.guard.js';
+import {
+  type CreateOrganizationDto,
+  ORGANIZATION_SLUG_PATTERN,
+} from './create-organization.dto.js';
 
-const organizationSelect = { id: true, name: true, slug: true } as const;
+const organizationSummary = { id: true, name: true, slug: true } as const;
 
 @Injectable()
 export class OrganizationsService {
+  // Explicit token: a type-only PrismaService import would leave DI metadata as Object.
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async create(identity: AuthIdentity, input: CreateOrganizationDto): Promise<OrganizationSummary> {
+  async create(user: AuthenticatedUser, dto: CreateOrganizationDto): Promise<OrganizationSummary> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const user = await tx.user.upsert({
-          where: { id: identity.id },
-          update: { email: identity.email },
-          create: { id: identity.id, email: identity.email },
+        const profile = await tx.user.upsert({
+          where: { id: user.id },
+          create: { id: user.id, email: user.email },
+          update: { email: user.email },
         });
-        if (user.deactivatedAt) throw new ForbiddenException('Your account is deactivated.');
-        const organization = await tx.organization.create({
+        if (profile.deactivatedAt) throw new ForbiddenException('Your account is deactivated.');
+
+        return tx.organization.create({
           data: {
-            name: input.name,
-            slug: input.slug,
+            name: dto.name,
+            slug: dto.slug,
             memberships: {
-              create: { userId: user.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+              create: {
+                userId: user.id,
+                role: 'OWNER',
+                status: 'ACTIVE',
+                joinedAt: new Date(),
+              },
             },
           },
-          select: organizationSelect,
+          select: organizationSummary,
         });
-        return { ...organization, role: 'OWNER' as const };
       });
-    } catch (error: unknown) {
+    } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('This workspace URL is already in use.');
+        throw new ConflictException('Organization slug is already taken.');
       }
+
       throw error;
     }
   }
 
-  async list(identity: AuthIdentity): Promise<OrganizationSummary[]> {
-    const memberships = await this.prisma.membership.findMany({
+  async listForUser(userId: string): Promise<OrganizationMembershipResponse[]> {
+    return this.prisma.membership.findMany({
       where: {
-        userId: identity.id,
+        userId,
         status: 'ACTIVE',
         user: { deactivatedAt: null },
         organization: { archivedAt: null },
       },
-      select: { role: true, organization: { select: organizationSelect } },
-      orderBy: [{ organization: { name: 'asc' } }, { organizationId: 'asc' }],
+      select: { role: true, organization: { select: organizationSummary } },
+      orderBy: { createdAt: 'desc' },
     });
-    return memberships.map(({ organization, role }) => ({ ...organization, role }));
   }
 
-  async findForMember(identity: AuthIdentity, slug: string): Promise<OrganizationSummary> {
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        userId: identity.id,
-        status: 'ACTIVE',
-        user: { deactivatedAt: null },
-        organization: { slug, archivedAt: null },
-      },
-      select: { role: true, organization: { select: organizationSelect } },
-    });
-    if (!membership) throw new NotFoundException('Workspace not found.');
-    return { ...membership.organization, role: membership.role };
+  /**
+   * Resolves the caller's ACTIVE membership in the organization identified by slug.
+   * Missing organizations and missing memberships both return 404 so that slugs
+   * belonging to other tenants are not disclosed.
+   */
+  async getMembership(userId: string, slug: string): Promise<OrganizationMembershipResponse> {
+    const membership =
+      slug.length >= 3 && slug.length <= 80 && ORGANIZATION_SLUG_PATTERN.test(slug)
+        ? await this.prisma.membership.findFirst({
+            where: {
+              userId,
+              status: 'ACTIVE',
+              user: { deactivatedAt: null },
+              organization: { slug, archivedAt: null },
+            },
+            select: { role: true, organization: { select: organizationSummary } },
+          })
+        : null;
+
+    if (!membership) {
+      throw new NotFoundException('Organization not found.');
+    }
+
+    return membership;
   }
 }
