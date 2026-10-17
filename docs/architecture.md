@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-OpsPilot is an incident coordination platform for engineering teams. The first release is centered on incidents, responders, timeline updates, service ownership, and follow-up actions. OPS-001 builds the delivery foundation and health check only; it does not persist incident data yet.
+OpsPilot is an incident coordination platform for engineering teams. The first release is centered on incidents, responders, timeline updates, service ownership, and follow-up actions. OPS-001 establishes delivery tooling, OPS-002 adds the persistence schema, and OPS-003 adds Supabase authentication and organization onboarding.
 
 ## Runtime components
 
@@ -12,11 +12,11 @@ OpsPilot is an incident coordination platform for engineering teams. The first r
 - `packages/typescript-config` and `packages/eslint-config` keep compiler and lint policy consistent.
 - `infra` is reserved for deployment and infrastructure-as-code decisions.
 
-The dependency direction is apps → shared packages. Shared packages must not import from applications. The web app calls the API over HTTP; it does not connect directly to the eventual database.
+The dependency direction is apps → shared packages. Shared packages must not import from applications. The web app calls the API over HTTP and uses Supabase only for Auth; it does not connect directly to the application database.
 
 ## Initial API contract
 
-`GET /api/v1/health` returns `HealthResponse` from `@opspilot/contracts` with service status, service name, app version, and a UTC timestamp. The health check is intentionally independent of a database until persistence is introduced.
+`GET /api/v1/health` is a public liveness endpoint returning `HealthResponse` from `@opspilot/contracts`. Startup validates Auth configuration and connects Prisma; the liveness handler itself does not query the database. Organization API contracts and authorization behavior are documented in [OPS-003](ops-003.md).
 
 ## Operational decisions
 
@@ -32,4 +32,4 @@ The dependency direction is apps → shared packages. Shared packages must not i
 - `User.id` is the UUID issued by Supabase Auth. Passwords and provider tokens are owned by Supabase Auth and are not stored in the application schema.
 - Organization-scoped records include `organizationId`. Composite foreign keys keep service ownership, incident responder assignments, incidents, and timeline events within one organization.
 - Memberships and services are soft-deactivated or archived so historical incident records keep their ownership context.
-- The initial schema covers users, organizations, memberships, services, incidents, active responder assignments, and incident timeline events. API authorization and row-level access rules are added with authentication.
+- The initial schema covers users, organizations, memberships, services, incidents, active responder assignments, and incident timeline events. A global NestJS guard verifies Supabase tokens; organization reads require ACTIVE membership and exclude archived/deactivated records. RLS blocks direct browser Data API access to application tables.

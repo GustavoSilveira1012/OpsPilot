@@ -62,6 +62,17 @@ enum IncidentEventType {
   SERVICE_UNLINKED
 }
 
+// Session tombstones intentionally outlive access tokens, including refreshed tokens.
+// No profile foreign key: users must be able to sign out before onboarding.
+model RevokedSession {
+  sessionId String   @id @map("session_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  revokedAt DateTime @default(now()) @map("revoked_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("revoked_sessions")
+}
+
 model User {
   id            String       @id @db.Uuid
   email         String?      @db.VarChar(320)

@@ -18,6 +18,17 @@ jobs:
     name: Validate workspace
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: opspilot
+          POSTGRES_PASSWORD: opspilot_test
+          POSTGRES_DB: opspilot_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U opspilot -d opspilot_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -49,3 +60,13 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Apply test database migrations
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public
+
+      - name: Check authentication and tenant isolation
+        run: pnpm test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public
