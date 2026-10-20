@@ -8,6 +8,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 import { Controller, Get, Header } from '@nestjs/common';
+import { Public } from './auth/auth.decorators.js';
 let HealthController = class HealthController {
     getHealth() {
         return {
@@ -20,6 +21,7 @@ let HealthController = class HealthController {
 };
 __decorate([
     Get('health'),
+    Public(),
     Header('Cache-Control', 'no-store'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),

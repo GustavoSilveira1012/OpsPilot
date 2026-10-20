@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
 
 const localDatabaseUrl =
-  'postgresql://opspilot:opspilot_local@localhost:5432/opspilot?schema=public';
+  'postgresql://opspilot:opspilot_local@localhost:55432/opspilot?schema=public';
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
