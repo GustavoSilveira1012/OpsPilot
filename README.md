@@ -1,8 +1,10 @@
 # OpsPilot
 
-OpsPilot is a full-stack engineering project for helping enterprise teams coordinate software incidents, ownership, updates, and follow-up work. Sprint 1 tasks OPS-001 and OPS-002 establish the monorepo and PostgreSQL foundations; product workflows will be added in later tasks.
+OpsPilot is a full-stack engineering project for helping enterprise teams coordinate software incidents, ownership, updates, and follow-up work. The monorepo and PostgreSQL foundations now include Supabase authentication and organization onboarding. Service and incident workflows are upcoming.
 
 ## Repository layout
+
+Authentication and organization onboarding are documented in [OPS-003](docs/ops-003.md). The landing page stays at `/`; sign in at `/login`, create an account at `/signup`, and create a workspace at `/onboarding`.
 
 ```text
 apps/
