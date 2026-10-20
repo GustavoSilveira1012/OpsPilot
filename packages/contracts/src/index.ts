@@ -55,3 +55,11 @@ export interface ServiceResponse {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ServiceOwnerResponse {
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+  role: OrganizationRole;
+  assignedAt: string;
+}

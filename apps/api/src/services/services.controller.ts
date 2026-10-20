@@ -13,8 +13,9 @@ import {
   Post,
   Req,
   ValidationPipe,
+  Put,
 } from '@nestjs/common';
-import type { ServiceResponse } from '@opspilot/contracts';
+import type { ServiceOwnerResponse, ServiceResponse } from '@opspilot/contracts';
 import type { AuthenticatedRequest } from '../auth/supabase-auth.guard.js';
 import { validationOptions } from '../validation.js';
 import { CreateServiceDto } from './create-service.dto.js';
@@ -83,5 +84,36 @@ export class ServicesController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<void> {
     await this.services.archive(request.user!.id, orgSlug, id);
+  }
+
+  @Get(':id/owners')
+  listOwners(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ServiceOwnerResponse[]> {
+    return this.services.listOwners(request.user!.id, orgSlug, id);
+  }
+
+  @Put(':id/owners/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async assignOwner(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<void> {
+    await this.services.assignOwner(request.user!.id, orgSlug, id, targetUserId);
+  }
+
+  @Delete(':id/owners/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeOwner(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<void> {
+    await this.services.removeOwner(request.user!.id, orgSlug, id, targetUserId);
   }
 }

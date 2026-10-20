@@ -1,12 +1,12 @@
 import {
-  ConflictException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ServiceResponse } from '@opspilot/contracts';
+import type { ServiceOwnerResponse, ServiceResponse } from '@opspilot/contracts';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateServiceDto } from './create-service.dto.js';
@@ -183,6 +183,146 @@ export class ServicesService {
         throw new NotFoundException('Service not found.');
       }
     });
+  }
+
+  async listOwners(
+    userId: string,
+    orgSlug: string,
+    serviceId: string,
+  ): Promise<ServiceOwnerResponse[]> {
+    const membership = await this.findActiveMembership(userId, orgSlug);
+
+    await this.assertServiceExists(membership.organizationId, serviceId);
+
+    const owners = await this.prisma.serviceOwnership.findMany({
+      where: {
+        organizationId: membership.organizationId,
+        serviceId,
+      },
+      select: {
+        userId: true,
+        createdAt: true,
+        membership: {
+          select: {
+            role: true,
+            user: {
+              select: {
+                displayName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return owners.map((owner) => ({
+      userId: owner.userId,
+      displayName: owner.membership.user.displayName,
+      email: owner.membership.user.email,
+      role: owner.membership.role,
+      assignedAt: owner.createdAt.toISOString(),
+    }));
+  }
+
+  async assignOwner(
+    userId: string,
+    orgSlug: string,
+    serviceId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const membership = await this.findActiveMembership(userId, orgSlug, tx);
+
+      if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot manage service owners.');
+      }
+
+      await this.assertServiceExists(membership.organizationId, serviceId, tx);
+
+      const target = await tx.membership.findFirst({
+        where: {
+          organizationId: membership.organizationId,
+          userId: targetUserId,
+          status: 'ACTIVE',
+          user: {
+            deactivatedAt: null,
+          },
+        },
+        select: {
+          userId: true,
+        },
+      });
+
+      if (!target) {
+        throw new NotFoundException('Active organization member not found.');
+      }
+
+      await tx.serviceOwnership.upsert({
+        where: {
+          organizationId_serviceId_userId: {
+            organizationId: membership.organizationId,
+            serviceId,
+            userId: targetUserId,
+          },
+        },
+        create: {
+          organizationId: membership.organizationId,
+          serviceId,
+          userId: targetUserId,
+        },
+        update: {},
+      });
+    });
+  }
+
+  async removeOwner(
+    userId: string,
+    orgSlug: string,
+    serviceId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const membership = await this.findActiveMembership(userId, orgSlug, tx);
+
+      if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot manage service owners.');
+      }
+
+      await this.assertServiceExists(membership.organizationId, serviceId, tx);
+
+      await tx.serviceOwnership.deleteMany({
+        where: {
+          organizationId: membership.organizationId,
+          serviceId,
+          userId: targetUserId,
+        },
+      });
+    });
+  }
+
+  private async assertServiceExists(
+    organizationId: string,
+    serviceId: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    const service = await client.service.findFirst({
+      where: {
+        id: serviceId,
+        organizationId,
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found.');
+    }
   }
 
   private async findActiveMembership(
