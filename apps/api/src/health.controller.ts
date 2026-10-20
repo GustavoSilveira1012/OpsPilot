@@ -1,9 +1,11 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import type { HealthResponse } from '@opspilot/contracts';
+import { Public } from './auth/auth.decorators.js';
 
 @Controller()
 export class HealthController {
   @Get('health')
+  @Public()
   @Header('Cache-Control', 'no-store')
   getHealth(): HealthResponse {
     return {
