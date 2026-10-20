@@ -163,6 +163,80 @@ test('duplicate slugs return 409 and the transaction leaves no orphan user', asy
   assert.equal(await prisma.user.findUnique({ where: { id: outsiderId } }), null);
 });
 
+test('service catalog lists active services and owners can create them', async () => {
+  const serviceSlug = `payments-${randomUUID().slice(0, 8)}`;
+  const payload = {
+    name: ' Payment API ',
+    slug: serviceSlug,
+    description: ' Handles payment processing. ',
+    tier: 'TIER_1',
+    runbookUrl: 'https://docs.example.test/payments',
+  };
+  const response = await request(
+    'POST',
+    `/organizations/${slug}/services`,
+    token(ownerId),
+    payload,
+  );
+  assert.equal(response.status, 201);
+  assert.match(response.headers.get('cache-control'), /no-store/);
+  const service = await response.json();
+  assert.deepEqual(Object.keys(service).sort(), [
+    'createdAt',
+    'description',
+    'id',
+    'name',
+    'runbookUrl',
+    'slug',
+    'status',
+    'tier',
+    'updatedAt',
+  ]);
+  assert.equal(service.name, 'Payment API');
+  assert.equal(service.description, 'Handles payment processing.');
+  assert.equal(service.tier, 'TIER_1');
+  assert.equal(service.status, 'OPERATIONAL');
+  assert.equal(service.runbookUrl, payload.runbookUrl);
+
+  const list = await request('GET', `/organizations/${slug}/services`, token(ownerId));
+  assert.equal(list.status, 200);
+  assert.match(list.headers.get('cache-control'), /no-store/);
+  assert.deepEqual(await list.json(), [service]);
+
+  assert.equal(
+    (
+      await request('POST', `/organizations/${slug}/services`, token(outsiderId), {
+        ...payload,
+        slug: `${serviceSlug}-outsider`,
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await request('POST', `/organizations/${slug}/services`, token(ownerId), {
+        ...payload,
+      })
+    ).status,
+    409,
+  );
+});
+
+test('service creation validates input and only organization admins can create services', async () => {
+  for (const body of [
+    { name: 'A', slug: 'valid-service' },
+    { name: 'Payment API', slug: '../invalid' },
+    { name: 'Payment API', slug: 'bad-service', tier: 'TIER_9' },
+    { name: 'Payment API', slug: 'bad-service', runbookUrl: 'not a URL' },
+    { name: 'Payment API', slug: 'valid-service', organizationId: organization.id },
+  ]) {
+    assert.equal(
+      (await request('POST', `/organizations/${slug}/services`, token(ownerId), body)).status,
+      400,
+    );
+  }
+});
+
 test('competing workspace creation preserves uniqueness and rolls back the losing profile', async () => {
   const ids = [randomUUID(), randomUUID()];
   const concurrentSlug = `race-${randomUUID().slice(0, 8)}`;
@@ -211,6 +285,18 @@ test('other tenants and INVITED, SUSPENDED or REMOVED memberships cannot read th
   const response = await request('GET', `/organizations/${slug}/membership`, token(outsiderId));
   assert.equal(response.status, 200);
   assert.equal((await response.json()).role, 'MEMBER');
+  const services = await request('GET', `/organizations/${slug}/services`, token(outsiderId));
+  assert.equal(services.status, 200);
+  assert.equal((await services.json()).length, 1);
+  assert.equal(
+    (
+      await request('POST', `/organizations/${slug}/services`, token(outsiderId), {
+        name: 'Member service',
+        slug: `member-${randomUUID().slice(0, 8)}`,
+      })
+    ).status,
+    403,
+  );
 });
 
 test('archived workspaces and deactivated users cannot access tenant data', async () => {
