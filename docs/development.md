@@ -50,6 +50,8 @@ pnpm build
 
 ## Environment variables
 
+For Supabase Auth configuration, confirmation URLs, organization endpoint contracts, and security verification, see [OPS-003](ops-003.md). Configure both applications with the same Supabase project URL and publishable key. The API requires `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`; the web requires their `NEXT_PUBLIC_` equivalents. These values must be supplied before starting the API or building the web app for deployment.
+
 | App | Variable                   | Purpose                                                              |
 | --- | -------------------------- | -------------------------------------------------------------------- |
 | API | `PORT`                     | HTTP listen port, default `3001`                                     |

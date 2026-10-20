@@ -10,6 +10,7 @@
     "lint": "eslint src --max-warnings=0",
     "start": "node dist/main.js",
     "typecheck": "prisma generate && tsc --noEmit --incremental false -p tsconfig.build.json",
+    "test:integration": "node --test test/organizations.e2e.test.mjs",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate:dev": "prisma migrate dev",
@@ -21,13 +22,16 @@
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@opspilot/contracts": "workspace:*",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
     "dotenv": "catalog:",
     "helmet": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "@prisma/adapter-pg": "catalog:",
     "@prisma/client": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@nestjs/cli": "catalog:",

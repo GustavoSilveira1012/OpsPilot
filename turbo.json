@@ -1,9 +1,25 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env", ".env.*", "!.env.example"],
-  "globalEnv": ["CI", "NODE_ENV"],
+  "globalEnv": [
+    "CI",
+    "NODE_ENV",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_API_BASE_URL"
+  ],
+  "globalPassThroughEnv": [
+    "SUPABASE_URL",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "PORT",
+    "CORS_ORIGINS",
+    "APP_VERSION"
+  ],
   "tasks": {
     "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },

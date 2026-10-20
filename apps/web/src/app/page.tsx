@@ -29,7 +29,13 @@ export default function HomePage() {
           </span>
           <span>OpsPilot</span>
         </Link>
-        <span className="topbar-label">ENGINEERING OPERATIONS</span>
+        <nav className="landing-nav" aria-label="Account">
+          <span className="topbar-label">ENGINEERING OPERATIONS</span>
+          <Link href="/login">Sign in</Link>
+          <Link className="primary-link" href="/signup">
+            Get started <span aria-hidden="true">→</span>
+          </Link>
+        </nav>
       </header>
 
       <section aria-labelledby="hero-title" className="hero">
