@@ -39,6 +39,7 @@ const ownerId = randomUUID();
 const outsiderId = randomUUID();
 const slug = `acme-${randomUUID().slice(0, 8)}`;
 let organization;
+let serviceId;
 const sessions = new Map();
 
 function token(userId, overrides = {}, key = privateKey) {
@@ -192,6 +193,7 @@ test('service catalog lists active services and owners can create them', async (
     'tier',
     'updatedAt',
   ]);
+  serviceId = service.id;
   assert.equal(service.name, 'Payment API');
   assert.equal(service.description, 'Handles payment processing.');
   assert.equal(service.tier, 'TIER_1');
@@ -220,6 +222,133 @@ test('service catalog lists active services and owners can create them', async (
     ).status,
     409,
   );
+});
+
+test('owners and admins can read and update organization services', async () => {
+  const adminId = randomUUID();
+  const memberId = randomUUID();
+  await prisma.user.create({ data: { id: adminId, email: `${adminId}@example.test` } });
+  await prisma.user.create({ data: { id: memberId, email: `${memberId}@example.test` } });
+  await prisma.membership.create({
+    data: {
+      userId: adminId,
+      organizationId: organization.id,
+      status: 'ACTIVE',
+      role: 'ADMIN',
+      joinedAt: new Date(),
+    },
+  });
+  await prisma.membership.create({
+    data: {
+      userId: memberId,
+      organizationId: organization.id,
+      status: 'ACTIVE',
+      role: 'MEMBER',
+      joinedAt: new Date(),
+    },
+  });
+
+  const memberRead = await request(
+    'GET',
+    `/organizations/${slug}/services/${serviceId}`,
+    token(memberId),
+  );
+  assert.equal(memberRead.status, 200);
+  assert.equal((await memberRead.json()).id, serviceId);
+
+  const adminUpdate = await request(
+    'PATCH',
+    `/organizations/${slug}/services/${serviceId}`,
+    token(adminId),
+    { description: 'Edited by admin', tier: 'TIER_0', status: 'DEGRADED' },
+  );
+  assert.equal(adminUpdate.status, 200);
+  const adminUpdatedService = await adminUpdate.json();
+  assert.equal(adminUpdatedService.description, 'Edited by admin');
+  assert.equal(adminUpdatedService.tier, 'TIER_0');
+  assert.equal(adminUpdatedService.status, 'DEGRADED');
+
+  const ownerUpdate = await request(
+    'PATCH',
+    `/organizations/${slug}/services/${serviceId}`,
+    token(ownerId),
+    { name: 'Payment API updated' },
+  );
+  assert.equal(ownerUpdate.status, 200);
+  const ownerUpdatedService = await ownerUpdate.json();
+  assert.equal(ownerUpdatedService.name, 'Payment API updated');
+  assert.equal(ownerUpdatedService.description, 'Edited by admin');
+  assert.equal(ownerUpdatedService.tier, 'TIER_0');
+  assert.equal(ownerUpdatedService.status, 'DEGRADED');
+});
+
+test('service IDs and update payloads are validated', async () => {
+  for (const method of ['GET', 'PATCH', 'DELETE']) {
+    const response = await request(
+      method,
+      `/organizations/${slug}/services/not-a-uuid`,
+      token(ownerId),
+      method === 'PATCH' ? { name: 'Valid service name' } : undefined,
+    );
+    assert.equal(response.status, 400);
+  }
+
+  for (const payload of [
+    {},
+    { name: 'A' },
+    { tier: 'TIER_9' },
+    { status: 'UNKNOWN' },
+    { runbookUrl: 'not a URL' },
+    { slug: 'cannot-change-the-slug' },
+  ]) {
+    const response = await request(
+      'PATCH',
+      `/organizations/${slug}/services/${serviceId}`,
+      token(ownerId),
+      payload,
+    );
+    assert.equal(
+      response.status,
+      400,
+      `Expected invalid update payload to be rejected: ${JSON.stringify(payload)}`,
+    );
+  }
+});
+
+test('users in another organization cannot read or modify a service', async () => {
+  const tenantOwnerId = randomUUID();
+  const tenantSlug = `other-${randomUUID().slice(0, 8)}`;
+  const createdOrganization = await request('POST', '/organizations', token(tenantOwnerId), {
+    name: 'Another workspace',
+    slug: tenantSlug,
+  });
+  assert.equal(createdOrganization.status, 201);
+
+  const catalog = await request(
+    'GET',
+    `/organizations/${tenantSlug}/services`,
+    token(tenantOwnerId),
+  );
+  assert.equal(catalog.status, 200);
+  assert.deepEqual(await catalog.json(), []);
+
+  for (const [method, body] of [
+    ['GET', undefined],
+    ['PATCH', { name: 'Cross-tenant edit' }],
+    ['DELETE', undefined],
+  ]) {
+    const response = await request(
+      method,
+      `/organizations/${tenantSlug}/services/${serviceId}`,
+      token(tenantOwnerId),
+      body,
+    );
+    assert.equal(response.status, 404);
+  }
+
+  const unchanged = await prisma.service.findUnique({ where: { id: serviceId } });
+  assert.equal(unchanged.name, 'Payment API updated');
+  assert.equal(unchanged.archivedAt, null);
 });
 
 test('service creation validates input and only organization admins can create services', async () => {
@@ -297,6 +426,55 @@ test('other tenants and INVITED, SUSPENDED or REMOVED memberships cannot read th
     ).status,
     403,
   );
+  assert.equal(
+    (
+      await request('PATCH', `/organizations/${slug}/services/${serviceId}`, token(outsiderId), {
+        name: 'Member edit',
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await request('DELETE', `/organizations/${slug}/services/${serviceId}`, token(outsiderId)))
+      .status,
+    403,
+  );
+});
+
+test('archiving hides a service but preserves its incident history', async () => {
+  const incident = await prisma.incident.create({
+    data: {
+      organizationId: organization.id,
+      number: 1,
+      title: 'Incident retained after service archive',
+      serviceId,
+      createdByUserId: ownerId,
+    },
+  });
+
+  const response = await request(
+    'DELETE',
+    `/organizations/${slug}/services/${serviceId}`,
+    token(ownerId),
+  );
+  assert.equal(response.status, 204);
+  assert.equal(await response.text(), '');
+
+  const archivedService = await prisma.service.findUnique({ where: { id: serviceId } });
+  assert.ok(archivedService.archivedAt);
+  const catalog = await request('GET', `/organizations/${slug}/services`, token(ownerId));
+  assert.equal(catalog.status, 200);
+  assert.deepEqual(await catalog.json(), []);
+  assert.equal(
+    (await request('GET', `/organizations/${slug}/services/${serviceId}`, token(ownerId))).status,
+    404,
+  );
+
+  const retainedIncident = await prisma.incident.findUnique({
+    where: { organizationId_number: { organizationId: organization.id, number: incident.number } },
+  });
+  assert.ok(retainedIncident);
+  assert.equal(retainedIncident.serviceId, serviceId);
 });
 
 test('archived workspaces and deactivated users cannot access tenant data', async () => {

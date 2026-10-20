@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -9,6 +10,7 @@ import type { ServiceResponse } from '@opspilot/contracts';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateServiceDto } from './create-service.dto.js';
+import type { UpdateServiceDto } from './update-service.dto.js';
 
 const serviceFields = {
   id: true,
@@ -82,6 +84,105 @@ export class ServicesService {
 
       throw error;
     }
+  }
+
+  async getById(userId: string, orgSlug: string, serviceId: string): Promise<ServiceResponse> {
+    const membership = await this.findActiveMembership(userId, orgSlug);
+
+    const service = await this.prisma.service.findFirst({
+      where: {
+        id: serviceId,
+        organizationId: membership.organizationId,
+        archivedAt: null,
+      },
+      select: serviceFields,
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found.');
+    }
+
+    return toResponse(service);
+  }
+
+  async update(
+    userId: string,
+    orgSlug: string,
+    serviceId: string,
+    dto: UpdateServiceDto,
+  ): Promise<ServiceResponse> {
+    if (Object.values(dto).every((value) => value === undefined)) {
+      throw new BadRequestException('At least one field must be provided.');
+    }
+
+    const updatedService = await this.prisma.$transaction(async (tx) => {
+      const membership = await this.findActiveMembership(userId, orgSlug, tx);
+
+      if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot edit services.');
+      }
+
+      const result = await tx.service.updateMany({
+        where: {
+          id: serviceId,
+          organizationId: membership.organizationId,
+          archivedAt: null,
+        },
+        data: {
+          name: dto.name,
+          description: dto.description,
+          tier: dto.tier,
+          status: dto.status,
+          runbookUrl: dto.runbookUrl,
+        },
+      });
+
+      if (result.count === 0) {
+        throw new NotFoundException('Service not found.');
+      }
+
+      const service = await tx.service.findFirst({
+        where: {
+          id: serviceId,
+          organizationId: membership.organizationId,
+          archivedAt: null,
+        },
+        select: serviceFields,
+      });
+
+      if (!service) {
+        throw new NotFoundException('Service not found.');
+      }
+
+      return service;
+    });
+
+    return toResponse(updatedService);
+  }
+
+  async archive(userId: string, orgSlug: string, serviceId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const membership = await this.findActiveMembership(userId, orgSlug, tx);
+
+      if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot archive services.');
+      }
+
+      const result = await tx.service.updateMany({
+        where: {
+          id: serviceId,
+          organizationId: membership.organizationId,
+          archivedAt: null,
+        },
+        data: {
+          archivedAt: new Date(),
+        },
+      });
+
+      if (result.count === 0) {
+        throw new NotFoundException('Service not found.');
+      }
+    });
   }
 
   private async findActiveMembership(

@@ -1,10 +1,15 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   ValidationPipe,
@@ -14,10 +19,16 @@ import type { AuthenticatedRequest } from '../auth/supabase-auth.guard.js';
 import { validationOptions } from '../validation.js';
 import { CreateServiceDto } from './create-service.dto.js';
 import { ServicesService } from './services.service.js';
+import { UpdateServiceDto } from './update-service.dto.js';
 
 const createServicePipe = new ValidationPipe({
   ...validationOptions,
   expectedType: CreateServiceDto,
+});
+
+const updateServicePipe = new ValidationPipe({
+  ...validationOptions,
+  expectedType: UpdateServiceDto,
 });
 
 @Controller('organizations/:orgSlug/services')
@@ -41,5 +52,36 @@ export class ServicesController {
     @Body(createServicePipe) dto: CreateServiceDto,
   ): Promise<ServiceResponse> {
     return this.services.create(request.user!.id, orgSlug, dto);
+  }
+
+  @Get(':id')
+  @Header('Cache-Control', 'private, no-store')
+  getById(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ServiceResponse> {
+    return this.services.getById(request.user!.id, orgSlug, id);
+  }
+
+  @Patch(':id')
+  @Header('Cache-Control', 'private, no-store')
+  update(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(updateServicePipe) dto: UpdateServiceDto,
+  ): Promise<ServiceResponse> {
+    return this.services.update(request.user!.id, orgSlug, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async archive(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<void> {
+    await this.services.archive(request.user!.id, orgSlug, id);
   }
 }
