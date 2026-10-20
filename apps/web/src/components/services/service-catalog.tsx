@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import type {
@@ -348,7 +349,12 @@ export function ServiceCatalog({ orgSlug, orgName, role, initialServices, loadEr
 
       <div className={styles.list}>
         {services.map((service) => (
-          <article key={service.id} className={styles.serviceCard}>
+          <Link
+            key={service.id}
+            href={`/${orgSlug}/services/${service.id}`}
+            className={styles.serviceCard}
+            aria-label={`View details for ${service.name}`}
+          >
             <div className={styles.serviceIcon} aria-hidden="true">
               ◈
             </div>
@@ -363,7 +369,7 @@ export function ServiceCatalog({ orgSlug, orgName, role, initialServices, loadEr
               <span className={styles.status}>{service.status.replaceAll('_', ' ')}</span>
               <span>{service.tier.replace('_', ' ')}</span>
             </div>
-          </article>
+          </Link>
         ))}
 
         {!loadError && services.length === 0 && (

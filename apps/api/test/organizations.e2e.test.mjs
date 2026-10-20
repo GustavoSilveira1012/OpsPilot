@@ -280,6 +280,18 @@ test('owners and admins can read and update organization services', async () => 
   assert.equal(ownerUpdatedService.description, 'Edited by admin');
   assert.equal(ownerUpdatedService.tier, 'TIER_0');
   assert.equal(ownerUpdatedService.status, 'DEGRADED');
+
+  const refreshedService = await request(
+    'GET',
+    `/organizations/${slug}/services/${serviceId}`,
+    token(ownerId),
+  );
+  assert.equal(refreshedService.status, 200);
+  const persistedService = await refreshedService.json();
+  assert.equal(persistedService.name, 'Payment API updated');
+  assert.equal(persistedService.description, 'Edited by admin');
+  assert.equal(persistedService.tier, 'TIER_0');
+  assert.equal(persistedService.status, 'DEGRADED');
 });
 
 test('service IDs and update payloads are validated', async () => {
