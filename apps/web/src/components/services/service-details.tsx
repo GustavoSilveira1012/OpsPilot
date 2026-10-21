@@ -9,17 +9,22 @@ import type {
   ServiceResponse,
   ServiceStatus,
   ServiceTier,
+  ServiceOwnerResponse,
+  OrganizationMemberResponse,
   UpdateServiceRequest,
 } from '@opspilot/contracts';
 
 import { apiBaseUrl, readApiError } from '@/lib/api';
 import { createClient } from '@/lib/supabase/client';
 import styles from './service-details.module.css';
+import { ServiceOwnership } from './service-ownership';
 
 type Props = {
   service: ServiceResponse;
   orgSlug: string;
   role: OrganizationRole;
+  owners: ServiceOwnerResponse[];
+  members: OrganizationMemberResponse[];
 };
 
 const tiers: ServiceTier[] = ['TIER_0', 'TIER_1', 'TIER_2', 'TIER_3'];
@@ -36,7 +41,7 @@ function formatValue(value: string) {
   return value.replaceAll('_', ' ');
 }
 
-export function ServiceDetails({ service, orgSlug, role }: Props) {
+export function ServiceDetails({ service, orgSlug, role, owners, members }: Props) {
   const router = useRouter();
   const canManage = role === 'OWNER' || role === 'ADMIN';
 
@@ -368,6 +373,15 @@ export function ServiceDetails({ service, orgSlug, role }: Props) {
           </div>
         </form>
       )}
+
+      <ServiceOwnership
+        key={current.id}
+        orgSlug={orgSlug}
+        serviceId={current.id}
+        role={role}
+        owners={owners}
+        members={members}
+      />
 
       {canManage && !editing && (
         <section className={styles.dangerZone}>

@@ -198,6 +198,7 @@ export class ServicesService {
       where: {
         organizationId: membership.organizationId,
         serviceId,
+        membership: { status: 'ACTIVE', user: { deactivatedAt: null } },
       },
       select: {
         userId: true,
@@ -241,7 +242,7 @@ export class ServicesService {
         throw new ForbiddenException('You cannot manage service owners.');
       }
 
-      await this.assertServiceExists(membership.organizationId, serviceId, tx);
+      await this.lockActiveService(membership.organizationId, serviceId, tx);
 
       const target = await tx.membership.findFirst({
         where: {
@@ -292,7 +293,7 @@ export class ServicesService {
         throw new ForbiddenException('You cannot manage service owners.');
       }
 
-      await this.assertServiceExists(membership.organizationId, serviceId, tx);
+      await this.lockActiveService(membership.organizationId, serviceId, tx);
 
       await tx.serviceOwnership.deleteMany({
         where: {
@@ -323,6 +324,22 @@ export class ServicesService {
     if (!service) {
       throw new NotFoundException('Service not found.');
     }
+  }
+
+  private async lockActiveService(
+    organizationId: string,
+    serviceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    // Serialize ownership writes with service updates/archival. The archive update
+    // acquires the same row lock, so a completed archive cannot gain new owners.
+    const services = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id FROM services
+      WHERE id = ${serviceId}::uuid AND organization_id = ${organizationId}::uuid
+        AND archived_at IS NULL
+      FOR UPDATE
+    `);
+    if (services.length === 0) throw new NotFoundException('Service not found.');
   }
 
   private async findActiveMembership(

@@ -56,10 +56,13 @@ export interface ServiceResponse {
   updatedAt: string;
 }
 
-export interface ServiceOwnerResponse {
+export interface OrganizationMemberResponse {
   userId: string;
   displayName: string | null;
   email: string | null;
   role: OrganizationRole;
+}
+
+export interface ServiceOwnerResponse extends OrganizationMemberResponse {
   assignedAt: string;
 }
