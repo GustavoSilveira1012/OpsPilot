@@ -1,0 +1,232 @@
+.page {
+  display: grid;
+  gap: 24px;
+}
+
+.backLink {
+  width: fit-content;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 3vw, 38px);
+}
+
+.headerActions,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin-bottom: 9px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.subtitle,
+.note,
+.description {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.statusBadge {
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: var(--green-soft);
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.panel {
+  display: grid;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.panel h2,
+.dangerZone h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.panel h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.detailsGrid,
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.detailsGrid {
+  margin: 0;
+}
+
+.detailsGrid dt {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detailsGrid dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 3px solid var(--green-soft);
+  border-color: var(--green);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.dangerButton {
+  border: 1px solid #c94d43;
+  background: #fff;
+  color: #a32e28;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.dangerZone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 24px;
+  border: 1px solid #efd5d2;
+  border-radius: 12px;
+  background: #fffafa;
+}
+
+.dangerZone p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.error,
+.success {
+  margin: 0;
+  padding: 13px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.error {
+  background: #fdecec;
+  color: #8a1f1f;
+}
+
+.success {
+  background: var(--green-soft);
+  color: var(--green-dark);
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  .header,
+  .dangerZone {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .headerActions {
+    flex-wrap: wrap;
+  }
+
+  .detailsGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 20px;
+  }
+}

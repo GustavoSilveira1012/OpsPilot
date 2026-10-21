@@ -66,12 +66,12 @@ jobs:
         env:
           DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public
 
-      - name: Check authentication and tenant isolation
+      - name: Check API authentication, service ownership and tenant isolation
         run: pnpm test:integration
         env:
           TEST_DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public
 
-      - name: Check protected pages, confirmation and session refresh
+      - name: Check protected pages, service ownership and session refresh
         run: pnpm test:platform
         env:
           TEST_DATABASE_URL: postgresql://opspilot:opspilot_test@localhost:5432/opspilot_test?schema=public

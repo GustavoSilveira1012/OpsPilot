@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { WorkspaceNav } from './workspace-nav';
 import { getOrganizationMembership } from '@/lib/organizations';
 import { SignOutButton } from './sign-out-button';
 import styles from './workspace.module.css';
@@ -25,18 +26,7 @@ export default async function OrganizationLayout({ children, params }: LayoutPro
             <span>{role.toLowerCase()}</span>
           </div>
         </div>
-        <nav aria-label="Workspace" className={styles.navigation}>
-          <Link
-            className={styles.activeLink}
-            aria-current="page"
-            href={`/${organization.slug}/dashboard`}
-          >
-            Dashboard
-          </Link>
-          <Link className={styles.secondaryLink} href="/onboarding">
-            Switch workspace
-          </Link>
-        </nav>
+        <WorkspaceNav slug={organization.slug} />
         <div className={styles.sidebarBottom}>
           <SignOutButton />
           <p>Ready for the unexpected.</p>
