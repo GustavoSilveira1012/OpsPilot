@@ -15,7 +15,7 @@ pnpm db:up
 pnpm --filter @opspilot/api db:migrate:dev --name ops002_initial_schema
 ```
 
-Docker Desktop is required for the local PostgreSQL service. The committed local credentials are for local development only. Use secrets from the deployment environment for hosted databases.
+Docker Desktop is required for the local PostgreSQL service. It publishes PostgreSQL on host port `55432` (container port `5432`) so it does not conflict with a locally installed PostgreSQL server. The committed local credentials are for local development only. Use secrets from the deployment environment for hosted databases.
 
 ## Start and validate
 
