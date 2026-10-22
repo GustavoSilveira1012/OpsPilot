@@ -45,11 +45,13 @@ export interface ServiceResponse {
     createdAt: string;
     updatedAt: string;
 }
-export interface ServiceOwnerResponse {
+export interface OrganizationMemberResponse {
     userId: string;
     displayName: string | null;
     email: string | null;
     role: OrganizationRole;
+}
+export interface ServiceOwnerResponse extends OrganizationMemberResponse {
     assignedAt: string;
 }
 //# sourceMappingURL=index.d.ts.map

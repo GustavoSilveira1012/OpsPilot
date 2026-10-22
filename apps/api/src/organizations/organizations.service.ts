@@ -5,7 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { OrganizationMembershipResponse, OrganizationSummary } from '@opspilot/contracts';
+import type {
+  OrganizationMemberResponse,
+  OrganizationMembershipResponse,
+  OrganizationSummary,
+} from '@opspilot/contracts';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/supabase-auth.guard.js';
@@ -67,6 +71,23 @@ export class OrganizationsService {
       select: { role: true, organization: { select: organizationSummary } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async listActiveMembers(userId: string, slug: string): Promise<OrganizationMemberResponse[]> {
+    const membership = await this.getMembership(userId, slug);
+    if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+      throw new ForbiddenException('You cannot manage service owners.');
+    }
+    const members = await this.prisma.membership.findMany({
+      where: {
+        organizationId: membership.organization.id,
+        status: 'ACTIVE',
+        user: { deactivatedAt: null },
+      },
+      select: { userId: true, role: true, user: { select: { displayName: true, email: true } } },
+      orderBy: [{ user: { displayName: 'asc' } }, { userId: 'asc' }],
+    });
+    return members.map(({ userId, role, user }) => ({ userId, role, ...user }));
   }
 
   /**

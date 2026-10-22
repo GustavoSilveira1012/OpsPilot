@@ -1,5 +1,14 @@
 import { Transform } from 'class-transformer';
-import { IsIn, IsOptional, IsString, IsUrl, Length, Matches, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Length,
+  Matches,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 import type { CreateServiceRequest } from '@opspilot/contracts';
 import { ServiceTier } from '../generated/prisma/enums.js';
 
@@ -25,7 +34,7 @@ export class CreateServiceDto implements CreateServiceRequest {
   @MaxLength(2000)
   description?: string | null;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsIn(Object.values(ServiceTier))
   tier?: ServiceTier;
 
@@ -33,6 +42,6 @@ export class CreateServiceDto implements CreateServiceRequest {
   @IsOptional()
   @IsString()
   @MaxLength(2048)
-  @IsUrl({ require_protocol: true })
+  @IsUrl({ require_protocol: true, protocols: ['http', 'https'] })
   runbookUrl?: string | null;
 }

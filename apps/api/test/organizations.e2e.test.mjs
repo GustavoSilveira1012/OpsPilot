@@ -94,6 +94,310 @@ after(async () => {
   await new Promise((resolve) => authServer.close(resolve));
 });
 
+async function ownershipFixture() {
+  const ids = {
+    owner: randomUUID(),
+    admin: randomUUID(),
+    member: randomUUID(),
+    foreign: randomUUID(),
+  };
+  const orgSlug = `ownership-${randomUUID().slice(0, 8)}`;
+  const foreignSlug = `foreign-${randomUUID().slice(0, 8)}`;
+  const created = await request('POST', '/organizations', token(ids.owner), {
+    name: 'Ownership workspace',
+    slug: orgSlug,
+  });
+  assert.equal(created.status, 201);
+  const org = await created.json();
+  for (const [id, role, displayName] of [
+    [ids.admin, 'ADMIN', 'Active Admin'],
+    [ids.member, 'MEMBER', 'Active Member'],
+  ]) {
+    await prisma.user.create({ data: { id, email: `${id}@example.test`, displayName } });
+    await prisma.membership.create({
+      data: { userId: id, organizationId: org.id, role, status: 'ACTIVE', joinedAt: new Date() },
+    });
+  }
+  const foreign = await request('POST', '/organizations', token(ids.foreign), {
+    name: 'Other workspace',
+    slug: foreignSlug,
+  });
+  assert.equal(foreign.status, 201);
+  const createdService = await request(
+    'POST',
+    `/organizations/${orgSlug}/services`,
+    token(ids.owner),
+    { name: 'Ownership service', slug: 'ownership-service' },
+  );
+  assert.equal(createdService.status, 201);
+  const service = await createdService.json();
+  const base = `/organizations/${orgSlug}/services/${service.id}`;
+  return {
+    ids,
+    org,
+    orgSlug,
+    foreignSlug,
+    service,
+    base,
+    owners: `${base}/owners`,
+    members: `/organizations/${orgSlug}/members`,
+  };
+}
+
+test('ownership and member-directory routes require authentication and validate UUIDs', async () => {
+  const f = await ownershipFixture();
+  for (const [method, path] of [
+    ['GET', f.members],
+    ['GET', f.owners],
+    ['PUT', `${f.owners}/${f.ids.member}`],
+    ['DELETE', `${f.owners}/${f.ids.member}`],
+  ])
+    assert.equal((await request(method, path)).status, 401);
+  for (const method of ['PUT', 'DELETE'])
+    assert.equal((await request(method, `${f.owners}/invalid`, token(f.ids.owner))).status, 400);
+  assert.equal(
+    (
+      await request(
+        'GET',
+        `/organizations/${f.orgSlug}/services/invalid/owners`,
+        token(f.ids.owner),
+      )
+    ).status,
+    400,
+  );
+});
+
+test('owner selector directory includes only real active members of the authorized organization', async () => {
+  const f = await ownershipFixture();
+  const excluded = [];
+  for (const status of ['INVITED', 'SUSPENDED', 'REMOVED', 'ACTIVE']) {
+    const id = randomUUID();
+    excluded.push(id);
+    await prisma.user.create({
+      data: { id, deactivatedAt: status === 'ACTIVE' ? new Date() : null },
+    });
+    await prisma.membership.create({
+      data: { userId: id, organizationId: f.org.id, role: 'MEMBER', status },
+    });
+  }
+  for (const actor of [f.ids.owner, f.ids.admin]) {
+    const response = await request('GET', f.members, token(actor));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    const members = await response.json();
+    assert.deepEqual(
+      members.map((member) => member.userId).sort(),
+      [f.ids.owner, f.ids.admin, f.ids.member].sort(),
+    );
+    assert.deepEqual(Object.keys(members[0]).sort(), ['displayName', 'email', 'role', 'userId']);
+    assert.ok(
+      !members.some(
+        (member) => excluded.includes(member.userId) || member.userId === f.ids.foreign,
+      ),
+    );
+  }
+  assert.equal((await request('GET', f.members, token(f.ids.member))).status, 403);
+  assert.equal((await request('GET', f.members, token(f.ids.foreign))).status, 404);
+});
+
+test('owners/admins assign and remove owners idempotently; regular members are read-only', async () => {
+  const f = await ownershipFixture();
+  const target = `${f.owners}/${f.ids.member}`;
+  const repeated = await Promise.all([
+    request('PUT', target, token(f.ids.owner)),
+    request('PUT', target, token(f.ids.admin)),
+  ]);
+  assert.deepEqual(
+    repeated.map((response) => response.status),
+    [204, 204],
+  );
+  assert.equal(
+    await prisma.serviceOwnership.count({
+      where: { serviceId: f.service.id, userId: f.ids.member },
+    }),
+    1,
+  );
+  const response = await request('GET', f.owners, token(f.ids.member));
+  assert.equal(response.status, 200);
+  const owners = await response.json();
+  assert.equal(owners.length, 1);
+  assert.equal(owners[0].displayName, 'Active Member');
+  assert.equal(owners[0].role, 'MEMBER');
+  assert.ok(Number.isFinite(Date.parse(owners[0].assignedAt)));
+  assert.deepEqual(Object.keys(owners[0]).sort(), [
+    'assignedAt',
+    'displayName',
+    'email',
+    'role',
+    'userId',
+  ]);
+  for (const method of ['PUT', 'DELETE'])
+    assert.equal((await request(method, target, token(f.ids.member))).status, 403);
+  for (const actor of [f.ids.admin, f.ids.owner])
+    assert.equal((await request('DELETE', target, token(actor))).status, 204);
+  assert.deepEqual(await (await request('GET', f.owners, token(f.ids.owner))).json(), []);
+});
+
+test('assignment rejects inactive, deactivated, missing and foreign members without writing ownership', async () => {
+  const f = await ownershipFixture();
+  for (const status of ['INVITED', 'SUSPENDED', 'REMOVED', 'ACTIVE']) {
+    const id = randomUUID();
+    await prisma.user.create({
+      data: { id, deactivatedAt: status === 'ACTIVE' ? new Date() : null },
+    });
+    await prisma.membership.create({
+      data: { userId: id, organizationId: f.org.id, role: 'MEMBER', status },
+    });
+    assert.equal((await request('PUT', `${f.owners}/${id}`, token(f.ids.owner))).status, 404);
+  }
+  for (const id of [f.ids.foreign, randomUUID()])
+    assert.equal((await request('PUT', `${f.owners}/${id}`, token(f.ids.owner))).status, 404);
+  assert.equal(await prisma.serviceOwnership.count({ where: { serviceId: f.service.id } }), 0);
+});
+
+test('a valid manager cannot read or mutate service ownership through a different tenant slug', async () => {
+  const f = await ownershipFixture();
+  await request('PUT', `${f.owners}/${f.ids.member}`, token(f.ids.owner));
+  const foreignBase = `/organizations/${f.foreignSlug}/services/${f.service.id}/owners`;
+  for (const base of [foreignBase, f.owners]) {
+    for (const [method, path] of [
+      ['GET', base],
+      ['PUT', `${base}/${f.ids.foreign}`],
+      ['DELETE', `${base}/${f.ids.member}`],
+    ])
+      assert.equal((await request(method, path, token(f.ids.foreign))).status, 404);
+  }
+  assert.equal(
+    await prisma.serviceOwnership.count({
+      where: { serviceId: f.service.id, userId: f.ids.member },
+    }),
+    1,
+  );
+});
+
+test('inactive callers, deactivated profiles and archived organizations lose ownership access', async () => {
+  const f = await ownershipFixture();
+  for (const status of ['INVITED', 'SUSPENDED', 'REMOVED']) {
+    await prisma.membership.update({
+      where: { organizationId_userId: { organizationId: f.org.id, userId: f.ids.admin } },
+      data: { status },
+    });
+    for (const [method, path] of [
+      ['GET', f.members],
+      ['GET', f.owners],
+      ['PUT', `${f.owners}/${f.ids.member}`],
+      ['DELETE', `${f.owners}/${f.ids.member}`],
+    ])
+      assert.equal((await request(method, path, token(f.ids.admin))).status, 404);
+  }
+  await prisma.membership.update({
+    where: { organizationId_userId: { organizationId: f.org.id, userId: f.ids.admin } },
+    data: { status: 'ACTIVE' },
+  });
+  await prisma.user.update({ where: { id: f.ids.admin }, data: { deactivatedAt: new Date() } });
+  assert.equal((await request('GET', f.owners, token(f.ids.admin))).status, 404);
+  await prisma.organization.update({ where: { id: f.org.id }, data: { archivedAt: new Date() } });
+  assert.equal((await request('GET', f.members, token(f.ids.owner))).status, 404);
+  assert.equal(
+    (await request('PUT', `${f.owners}/${f.ids.member}`, token(f.ids.owner))).status,
+    404,
+  );
+});
+
+test('inactive assigned owners are hidden while their historical rows remain removable', async () => {
+  const f = await ownershipFixture();
+  const target = `${f.owners}/${f.ids.member}`;
+  assert.equal((await request('PUT', target, token(f.ids.owner))).status, 204);
+  for (const status of ['INVITED', 'SUSPENDED', 'REMOVED']) {
+    await prisma.membership.update({
+      where: { organizationId_userId: { organizationId: f.org.id, userId: f.ids.member } },
+      data: { status },
+    });
+    assert.deepEqual(await (await request('GET', f.owners, token(f.ids.owner))).json(), []);
+    assert.equal(await prisma.serviceOwnership.count({ where: { serviceId: f.service.id } }), 1);
+  }
+  await prisma.membership.update({
+    where: { organizationId_userId: { organizationId: f.org.id, userId: f.ids.member } },
+    data: { status: 'ACTIVE' },
+  });
+  await prisma.user.update({ where: { id: f.ids.member }, data: { deactivatedAt: new Date() } });
+  assert.deepEqual(await (await request('GET', f.owners, token(f.ids.owner))).json(), []);
+  assert.equal((await request('DELETE', target, token(f.ids.admin))).status, 204);
+});
+
+test('editing validates nullable fields, protocol restrictions and immutable tenant/slug fields', async () => {
+  const f = await ownershipFixture();
+  for (const body of [
+    { name: 'Valid name', slug: 'invalid-tier', tier: null },
+    { name: 'Valid name', slug: 'ftp-link', runbookUrl: 'ftp://example.com/runbook' },
+  ])
+    assert.equal(
+      (await request('POST', `/organizations/${f.orgSlug}/services`, token(f.ids.owner), body))
+        .status,
+      400,
+    );
+  for (const body of [
+    { name: null },
+    { tier: null },
+    { status: null },
+    { runbookUrl: 'javascript:alert(1)' },
+    { runbookUrl: 'ftp://example.com/runbook' },
+    { organizationId: f.org.id },
+    { slug: 'new-slug' },
+  ])
+    assert.equal((await request('PATCH', f.base, token(f.ids.owner), body)).status, 400);
+  const edited = await request('PATCH', f.base, token(f.ids.admin), {
+    name: 'Updated ownership service',
+    description: null,
+    runbookUrl: null,
+    status: 'MAINTENANCE',
+  });
+  assert.equal(edited.status, 200);
+  assert.equal((await edited.json()).status, 'MAINTENANCE');
+  assert.equal(
+    (await request('PATCH', f.base, token(f.ids.member), { name: 'Unauthorized edit' })).status,
+    403,
+  );
+});
+
+test('archiving closes owner endpoints while preserving assignments and forbidding member archival', async () => {
+  const f = await ownershipFixture();
+  assert.equal(
+    (await request('PUT', `${f.owners}/${f.ids.member}`, token(f.ids.owner))).status,
+    204,
+  );
+  assert.equal((await request('DELETE', f.base, token(f.ids.member))).status, 403);
+  assert.equal((await request('DELETE', f.base, token(f.ids.admin))).status, 204);
+  for (const [method, path] of [
+    ['GET', f.base],
+    ['GET', f.owners],
+    ['PUT', `${f.owners}/${f.ids.member}`],
+    ['DELETE', `${f.owners}/${f.ids.member}`],
+    ['DELETE', f.base],
+  ])
+    assert.equal((await request(method, path, token(f.ids.owner))).status, 404);
+  assert.equal(await prisma.serviceOwnership.count({ where: { serviceId: f.service.id } }), 1);
+  assert.deepEqual(
+    await (await request('GET', `/organizations/${f.orgSlug}/services`, token(f.ids.owner))).json(),
+    [],
+  );
+});
+
+test('concurrent ownership assignment and archiving serialize on the service row', async () => {
+  const f = await ownershipFixture();
+  const [assigned, archived] = await Promise.all([
+    request('PUT', `${f.owners}/${f.ids.member}`, token(f.ids.owner)),
+    request('DELETE', f.base, token(f.ids.admin)),
+  ]);
+  assert.equal(archived.status, 204);
+  assert.ok([204, 404].includes(assigned.status));
+  assert.equal(
+    (await request('PUT', `${f.owners}/${f.ids.admin}`, token(f.ids.owner))).status,
+    404,
+  );
+  assert.ok((await prisma.service.findUnique({ where: { id: f.service.id } })).archivedAt);
+});
+
 test('health remains public; organization endpoints reject missing or malformed tokens', async () => {
   assert.equal((await request('GET', '/health')).status, 200);
   assert.equal((await request('GET', '/organizations')).status, 401);

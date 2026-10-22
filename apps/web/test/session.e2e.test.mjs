@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { createServerClient } from '@supabase/ssr';
+const apiRequire = createRequire(new URL('../../api/package.json', import.meta.url));
+const pg = apiRequire('pg');
 
 const web = process.env.TEST_WEB_URL;
 const api = process.env.TEST_API_URL;
@@ -35,7 +38,12 @@ async function signIn(email = `${randomUUID()}@example.test`) {
     password: 'Fixture-only-password-2026!',
   });
   assert.equal(error, null);
-  return { ...session, token: data.session.access_token };
+  return {
+    ...session,
+    token: data.session.access_token,
+    userId: data.user.id,
+    email: data.user.email,
+  };
 }
 function page(path, cookie) {
   return fetch(`${web}${path}`, { redirect: 'manual', headers: cookie ? { Cookie: cookie } : {} });
@@ -129,4 +137,106 @@ test('logout clears cookies and replaying the old session cannot reopen protecte
   const replayed = await page(`/${organization.slug}/dashboard`, oldCookie);
   assert.equal(replayed.status, 307);
   assert.equal(replayed.headers.get('location'), '/login');
+});
+
+test('service ownership renders real members, persists edits and disappears after archival', async () => {
+  const owner = await signIn();
+  const organization = await createWorkspace(owner);
+  const endpoint = `${api}/organizations/${organization.slug}/services`;
+  const headers = { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' };
+  const created = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: 'Platform Ownership Service',
+      slug: 'platform-ownership-service',
+    }),
+  });
+  assert.equal(created.status, 201);
+  const service = await created.json();
+  const route = `/${organization.slug}/services/${service.id}`;
+  const initial = await page(route, owner.cookie());
+  assert.equal(initial.status, 200);
+  const html = await initial.text();
+  assert.match(html, /Service ownership/);
+  assert.match(html, /Assign an active workspace member/);
+  assert.ok(html.includes(owner.email));
+  const members = await fetch(`${api}/organizations/${organization.slug}/members`, { headers });
+  assert.equal(members.status, 200);
+  assert.deepEqual(
+    (await members.json()).map((member) => member.userId),
+    [owner.userId],
+  );
+  assert.equal(
+    (await fetch(`${endpoint}/${service.id}/owners/${owner.userId}`, { method: 'PUT', headers }))
+      .status,
+    204,
+  );
+  const assigned = await page(route, owner.cookie());
+  assert.match(await assigned.text(), /Remove .* as owner/);
+  const edited = await fetch(`${endpoint}/${service.id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ name: 'Edited Ownership Service', status: 'DEGRADED' }),
+  });
+  assert.equal(edited.status, 200);
+  assert.match(await (await page(route, owner.cookie())).text(), /Edited Ownership Service/);
+  assert.equal(
+    (await fetch(`${endpoint}/${service.id}/owners/${owner.userId}`, { method: 'DELETE', headers }))
+      .status,
+    204,
+  );
+  assert.match(await (await page(route, owner.cookie())).text(), /No active owners assigned/);
+  assert.equal(
+    (await fetch(`${endpoint}/${service.id}`, { method: 'DELETE', headers })).status,
+    204,
+  );
+  assert.match(await (await page(route, owner.cookie())).text(), /Workspace unavailable/);
+  const catalog = await page(`/${organization.slug}/services`, owner.cookie());
+  assert.equal(catalog.status, 200);
+  assert.ok(!(await catalog.text()).includes('Edited Ownership Service'));
+});
+
+test('ordinary members see ownership without manager controls and outsiders cannot open service details', async () => {
+  const owner = await signIn();
+  const member = await signIn();
+  const outsider = await signIn();
+  const organization = await createWorkspace(owner);
+  const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      'INSERT INTO users (id, email, display_name, updated_at) VALUES ($1, $2, $3, now())',
+      [member.userId, member.email, 'Read-only service member'],
+    );
+    await client.query(
+      "INSERT INTO memberships (organization_id, user_id, role, status, updated_at) VALUES ($1, $2, 'MEMBER', 'ACTIVE', now())",
+      [organization.id, member.userId],
+    );
+  } finally {
+    await client.end();
+  }
+  const headers = { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'application/json' };
+  const endpoint = `${api}/organizations/${organization.slug}/services`;
+  const created = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: 'Read-only Ownership Service', slug: 'read-only-service' }),
+  });
+  assert.equal(created.status, 201);
+  const service = await created.json();
+  assert.equal(
+    (await fetch(`${endpoint}/${service.id}/owners/${member.userId}`, { method: 'PUT', headers }))
+      .status,
+    204,
+  );
+  const path = `/${organization.slug}/services/${service.id}`;
+  const response = await page(path, member.cookie());
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Read-only service member/);
+  assert.match(html, /Workspace owners and admins manage service ownership/);
+  assert.ok(!html.includes('Assign an active workspace member'));
+  assert.ok(!html.includes('Archive service'));
+  assert.match(await (await page(path, outsider.cookie())).text(), /Workspace unavailable/);
 });

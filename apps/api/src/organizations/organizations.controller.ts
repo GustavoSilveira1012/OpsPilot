@@ -9,7 +9,11 @@ import {
   Req,
   ValidationPipe,
 } from '@nestjs/common';
-import type { OrganizationMembershipResponse, OrganizationSummary } from '@opspilot/contracts';
+import type {
+  OrganizationMemberResponse,
+  OrganizationMembershipResponse,
+  OrganizationSummary,
+} from '@opspilot/contracts';
 import type { AuthenticatedRequest, AuthenticatedUser } from '../auth/supabase-auth.guard.js';
 import { validationOptions } from '../validation.js';
 import { CreateOrganizationDto } from './create-organization.dto.js';
@@ -53,5 +57,14 @@ export class OrganizationsController {
     @Param('slug') slug: string,
   ): Promise<OrganizationMembershipResponse> {
     return this.organizations.getMembership(currentUser(request).id, slug);
+  }
+
+  @Get(':slug/members')
+  @Header('Cache-Control', 'private, no-store')
+  members(
+    @Req() request: AuthenticatedRequest,
+    @Param('slug') slug: string,
+  ): Promise<OrganizationMemberResponse[]> {
+    return this.organizations.listActiveMembers(currentUser(request).id, slug);
   }
 }

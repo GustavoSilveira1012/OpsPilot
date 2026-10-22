@@ -87,6 +87,7 @@ export class ServicesController {
   }
 
   @Get(':id/owners')
+  @Header('Cache-Control', 'private, no-store')
   listOwners(
     @Req() request: AuthenticatedRequest,
     @Param('orgSlug') orgSlug: string,
@@ -96,6 +97,7 @@ export class ServicesController {
   }
 
   @Put(':id/owners/:userId')
+  @Header('Cache-Control', 'private, no-store')
   @HttpCode(HttpStatus.NO_CONTENT)
   async assignOwner(
     @Req() request: AuthenticatedRequest,
@@ -107,6 +109,7 @@ export class ServicesController {
   }
 
   @Delete(':id/owners/:userId')
+  @Header('Cache-Control', 'private, no-store')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeOwner(
     @Req() request: AuthenticatedRequest,
