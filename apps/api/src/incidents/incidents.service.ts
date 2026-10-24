@@ -283,22 +283,31 @@ export class IncidentsService {
       const events: Prisma.IncidentEventCreateManyInput[] = [];
       if (statusChanged) {
         events.push({
-          organizationId: member.organizationId, incidentId, actorUserId: userId,
-          type: 'STATUS_CHANGED', occurredAt: now,
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'STATUS_CHANGED',
+          occurredAt: now,
           details: { previous: current.status, next: dto.status! },
         });
       }
       if (severityChanged) {
         events.push({
-          organizationId: member.organizationId, incidentId, actorUserId: userId,
-          type: 'SEVERITY_CHANGED', occurredAt: now,
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'SEVERITY_CHANGED',
+          occurredAt: now,
           details: { previous: current.severity, next: dto.severity! },
         });
       }
       if (summaryChanged) {
         events.push({
-          organizationId: member.organizationId, incidentId, actorUserId: userId,
-          type: 'DESCRIPTION_UPDATED', occurredAt: now,
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'DESCRIPTION_UPDATED',
+          occurredAt: now,
           details: { previous: current.summary, next: dto.summary },
         });
       }
@@ -307,10 +316,12 @@ export class IncidentsService {
           organizationId_id: { organizationId: member.organizationId, id: incidentId },
         },
         data: {
-          ...(statusChanged ? {
-            status: dto.status!,
-            resolvedAt: dto.status === 'RESOLVED' ? now : null,
-          } : {}),
+          ...(statusChanged
+            ? {
+                status: dto.status!,
+                resolvedAt: dto.status === 'RESOLVED' ? now : null,
+              }
+            : {}),
           ...(severityChanged ? { severity: dto.severity! } : {}),
           ...(summaryChanged ? { summary: dto.summary } : {}),
         },
@@ -338,12 +349,19 @@ export class IncidentsService {
       if (rows.length === 0) throw new NotFoundException('Incident not found.');
       const created = await tx.incidentEvent.create({
         data: {
-          organizationId: member.organizationId, incidentId,
-          actorUserId: userId, type: 'MESSAGE_ADDED', message: dto.message,
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'MESSAGE_ADDED',
+          message: dto.message,
         },
         select: {
-          id: true, type: true, actorUserId: true, message: true,
-          details: true, occurredAt: true,
+          id: true,
+          type: true,
+          actorUserId: true,
+          message: true,
+          details: true,
+          occurredAt: true,
         },
       });
       return {
@@ -352,5 +370,4 @@ export class IncidentsService {
       };
     });
   }
-
 }

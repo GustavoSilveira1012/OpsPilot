@@ -12,9 +12,7 @@ export class UpdateIncidentDto implements UpdateIncidentRequest {
   @IsIn(Object.values(IncidentSeverity))
   severity?: IncidentSeverity;
 
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(10000)

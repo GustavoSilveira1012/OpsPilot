@@ -91,7 +91,9 @@ export interface UpdateIncidentRequest {
   severity?: IncidentSeverity;
   summary?: string | null;
 }
-export interface CreateIncidentNoteRequest { message: string; }
+export interface CreateIncidentNoteRequest {
+  message: string;
+}
 export interface IncidentResponse {
   id: string;
   number: number;
@@ -114,5 +116,10 @@ export interface IncidentEventResponse {
   details: unknown;
   occurredAt: string;
 }
-export interface IncidentDetailResponse extends IncidentResponse { timeline: IncidentEventResponse[]; }
-export interface IncidentListResponse { items: IncidentResponse[]; total: number; }
+export interface IncidentDetailResponse extends IncidentResponse {
+  timeline: IncidentEventResponse[];
+}
+export interface IncidentListResponse {
+  items: IncidentResponse[];
+  total: number;
+}
