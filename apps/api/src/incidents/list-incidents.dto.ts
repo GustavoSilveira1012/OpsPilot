@@ -17,14 +17,18 @@ export class ListIncidentsDto {
   serviceId?: string;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => Number(value))
+  @Transform(({ value }: { value: unknown }) =>
+    value === undefined || value === null ? value : Number(value),
+  )
   @IsInt()
   @Min(0)
   @Max(1000000)
   offset?: number;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) => Number(value))
+  @Transform(({ value }: { value: unknown }) =>
+    value === undefined || value === null ? value : Number(value),
+  )
   @IsInt()
   @Min(1)
   @Max(100)
