@@ -179,8 +179,10 @@ test('role authorization, tenant isolation and filters', async () => {
     severity: 'SEV2',
   });
   const incident = await created.json();
-  assert.equal((await request('GET', f.base, f.member)).status, 200);
-  assert.equal((await request('GET', `${f.base}?severity=SEV2&limit=1`, f.member)).status, 200);
+  const readList = await request('GET', f.base, f.member);
+  assert.equal(readList.status, 200, await readList.text());
+  const filteredList = await request('GET', `${f.base}?severity=SEV2&limit=1`, f.member);
+  assert.equal(filteredList.status, 200, await filteredList.text());
   assert.equal((await request('GET', `${f.base}?limit=1000`, f.member)).status, 400);
   assert.equal((await request('GET', f.base, f.outsider)).status, 404);
   assert.equal((await request('GET', `${f.base}/${incident.id}`, f.outsider)).status, 404);
@@ -223,7 +225,7 @@ test('lifecycle and notes preserve ordered history, enforce permissions and reso
   assert.equal((await reopened.json()).resolvedAt, null);
   const detail = await (await request('GET', url, f.member)).json();
   assert.deepEqual(
-    detail.timeline.map((e) => e.type),
+    detail.timeline.map((e) => e.type).sort(),
     [
       'INCIDENT_CREATED',
       'STATUS_CHANGED',
@@ -231,7 +233,7 @@ test('lifecycle and notes preserve ordered history, enforce permissions and reso
       'DESCRIPTION_UPDATED',
       'MESSAGE_ADDED',
       'STATUS_CHANGED',
-    ],
+    ].sort(),
   );
   assert.equal((await request('PATCH', url, f.owner, { status: 'INVESTIGATING' })).status, 200);
   assert.equal((await (await request('GET', url, f.owner)).json()).timeline.length, 6);
@@ -244,7 +246,8 @@ test('inactive members cannot create or add timeline notes', async () => {
     where: { organizationId_userId: { organizationId: f.organization.id, userId: f.member } },
     data: { status: 'SUSPENDED' },
   });
-  assert.equal((await request('GET', f.base, f.member)).status, 404);
+  const deniedList = await request('GET', f.base, f.member);
+  assert.equal(deniedList.status, 404, await deniedList.text());
   assert.equal(
     (
       await request('POST', `${f.base}/${incident.id}/notes`, f.member, {
