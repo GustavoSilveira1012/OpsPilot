@@ -1,15 +1,26 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import type {
   IncidentDetailResponse,
   IncidentListResponse,
   IncidentResponse,
+  IncidentStatus,
+  IncidentEventResponse,
 } from '@opspilot/contracts';
 
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateIncidentDto } from './create-incident.dto.js';
 import type { ListIncidentsDto } from './list-incidents.dto.js';
+import type { UpdateIncidentDto } from './update-incident.dto.js';
+import type { CreateIncidentNoteDto } from './create-incident-note.dto.js';
 
 const incidentFields = {
   id: true,
@@ -39,6 +50,13 @@ function toResponse(incident: IncidentRecord): IncidentResponse {
     updatedAt: incident.updatedAt.toISOString(),
   };
 }
+
+const transitions: Record<IncidentStatus, readonly IncidentStatus[]> = {
+  INVESTIGATING: ['IDENTIFIED', 'MONITORING', 'RESOLVED'],
+  IDENTIFIED: ['INVESTIGATING', 'MONITORING', 'RESOLVED'],
+  MONITORING: ['INVESTIGATING', 'IDENTIFIED', 'RESOLVED'],
+  RESOLVED: ['INVESTIGATING'],
+};
 
 @Injectable()
 export class IncidentsService {
@@ -223,4 +241,116 @@ export class IncidentsService {
       })),
     };
   }
+  async update(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    dto: UpdateIncidentDto,
+  ): Promise<IncidentResponse> {
+    if (Object.values(dto).every((value) => value === undefined)) {
+      throw new BadRequestException('At least one field must be provided.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot update incidents.');
+      }
+
+      // Serialize lifecycle writes and timeline events for this incident.
+      const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT id FROM incidents WHERE id = ${incidentId}::uuid
+          AND organization_id = ${member.organizationId}::uuid
+        FOR UPDATE
+      `);
+      if (rows.length === 0) throw new NotFoundException('Incident not found.');
+
+      const current = await tx.incident.findFirst({
+        where: { id: incidentId, organizationId: member.organizationId },
+        select: incidentFields,
+      });
+      if (!current) throw new NotFoundException('Incident not found.');
+
+      const statusChanged = dto.status !== undefined && dto.status !== current.status;
+      const severityChanged = dto.severity !== undefined && dto.severity !== current.severity;
+      const summaryChanged = dto.summary !== undefined && dto.summary !== current.summary;
+      if (statusChanged && !transitions[current.status].includes(dto.status!)) {
+        throw new ConflictException('Invalid incident status transition.');
+      }
+      if (!statusChanged && !severityChanged && !summaryChanged) return toResponse(current);
+
+      const now = new Date();
+      const events: Prisma.IncidentEventCreateManyInput[] = [];
+      if (statusChanged) {
+        events.push({
+          organizationId: member.organizationId, incidentId, actorUserId: userId,
+          type: 'STATUS_CHANGED', occurredAt: now,
+          details: { previous: current.status, next: dto.status! },
+        });
+      }
+      if (severityChanged) {
+        events.push({
+          organizationId: member.organizationId, incidentId, actorUserId: userId,
+          type: 'SEVERITY_CHANGED', occurredAt: now,
+          details: { previous: current.severity, next: dto.severity! },
+        });
+      }
+      if (summaryChanged) {
+        events.push({
+          organizationId: member.organizationId, incidentId, actorUserId: userId,
+          type: 'DESCRIPTION_UPDATED', occurredAt: now,
+          details: { previous: current.summary, next: dto.summary },
+        });
+      }
+      const updated = await tx.incident.update({
+        where: {
+          organizationId_id: { organizationId: member.organizationId, id: incidentId },
+        },
+        data: {
+          ...(statusChanged ? {
+            status: dto.status!,
+            resolvedAt: dto.status === 'RESOLVED' ? now : null,
+          } : {}),
+          ...(severityChanged ? { severity: dto.severity! } : {}),
+          ...(summaryChanged ? { summary: dto.summary } : {}),
+        },
+        select: incidentFields,
+      });
+      await tx.incidentEvent.createMany({ data: events });
+      return toResponse(updated);
+    });
+  }
+
+  async addNote(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    dto: CreateIncidentNoteDto,
+  ): Promise<IncidentEventResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+      // Notes are collaborative: any active organization member may contribute.
+      const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT id FROM incidents WHERE id = ${incidentId}::uuid
+          AND organization_id = ${member.organizationId}::uuid
+        FOR UPDATE
+      `);
+      if (rows.length === 0) throw new NotFoundException('Incident not found.');
+      const created = await tx.incidentEvent.create({
+        data: {
+          organizationId: member.organizationId, incidentId,
+          actorUserId: userId, type: 'MESSAGE_ADDED', message: dto.message,
+        },
+        select: {
+          id: true, type: true, actorUserId: true, message: true,
+          details: true, occurredAt: true,
+        },
+      });
+      return {
+        ...created,
+        occurredAt: created.occurredAt.toISOString(),
+      };
+    });
+  }
+
 }
