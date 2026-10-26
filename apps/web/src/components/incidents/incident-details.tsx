@@ -38,10 +38,6 @@ function time(value: string) {
 function readable(value: string) {
   return value.replaceAll('_', ' ').toLowerCase();
 }
-function memberName(member: OrganizationMemberResponse) {
-  return member.displayName || member.email || member.userId.slice(0, 8);
-}
-
 export function IncidentDetails({ orgSlug, role, incident, services, members }: Props) {
   const router = useRouter();
   const canManage = role === 'OWNER' || role === 'ADMIN';
