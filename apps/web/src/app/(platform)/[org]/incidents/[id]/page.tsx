@@ -43,7 +43,7 @@ export default async function IncidentDetailsPage({ params }: PageProps<'/[org]/
   ]);
   return (
     <IncidentDetails
-      key={incident.id}
+      key={`${incident.id}:${incident.updatedAt}:${incident.timeline.length}`}
       orgSlug={org}
       role={membership.role}
       incident={incident}
