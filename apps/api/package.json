@@ -10,7 +10,7 @@
     "lint": "eslint src --max-warnings=0",
     "start": "node dist/main.js",
     "typecheck": "prisma generate && tsc --noEmit --incremental false -p tsconfig.build.json",
-    "test:integration": "node --test test/organizations.e2e.test.mjs",
+    "test:integration": "node --test test/organizations.e2e.test.mjs test/incidents.e2e.test.mjs",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate:dev": "prisma migrate dev",
