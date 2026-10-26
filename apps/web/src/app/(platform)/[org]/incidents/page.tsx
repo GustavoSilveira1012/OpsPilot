@@ -14,7 +14,9 @@ export default async function IncidentsPage({ params }: PageProps<'/[org]/incide
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims) redirect('/login');
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) redirect('/login');
   const base = `${apiBaseUrl}/organizations/${encodeURIComponent(org)}`;
   let incidents: IncidentListResponse = { items: [], total: 0 };
@@ -22,11 +24,18 @@ export default async function IncidentsPage({ params }: PageProps<'/[org]/incide
   let loadError: string | null = null;
   try {
     const [incidentResult, serviceResult] = await Promise.all([
-      fetch(`${base}/incidents?limit=25`, { cache: 'no-store', headers: { Authorization: `Bearer ${session.access_token}` } }),
-      fetch(`${base}/services`, { cache: 'no-store', headers: { Authorization: `Bearer ${session.access_token}` } }),
+      fetch(`${base}/incidents?limit=25`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }),
+      fetch(`${base}/services`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }),
     ]);
     if (incidentResult.status === 401 || serviceResult.status === 401) redirect('/login');
-    if (!incidentResult.ok || !serviceResult.ok) throw new Error('Incident data could not be loaded.');
+    if (!incidentResult.ok || !serviceResult.ok)
+      throw new Error('Incident data could not be loaded.');
     incidents = (await incidentResult.json()) as IncidentListResponse;
     services = (await serviceResult.json()) as ServiceResponse[];
   } catch (error) {
@@ -34,5 +43,14 @@ export default async function IncidentsPage({ params }: PageProps<'/[org]/incide
     if (error && typeof error === 'object' && 'digest' in error) throw error;
     loadError = 'Could not load incidents. Please retry.';
   }
-  return <IncidentCatalog orgSlug={org} orgName={membership.organization.name} role={membership.role} initial={incidents} services={services} initialError={loadError} />;
+  return (
+    <IncidentCatalog
+      orgSlug={org}
+      orgName={membership.organization.name}
+      role={membership.role}
+      initial={incidents}
+      services={services}
+      initialError={loadError}
+    />
+  );
 }

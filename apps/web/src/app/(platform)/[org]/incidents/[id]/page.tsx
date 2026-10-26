@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import type { IncidentDetailResponse, OrganizationMemberResponse, ServiceResponse } from '@opspilot/contracts';
+import type {
+  IncidentDetailResponse,
+  OrganizationMemberResponse,
+  ServiceResponse,
+} from '@opspilot/contracts';
 import { IncidentDetails } from '@/components/incidents/incident-details';
 import { apiBaseUrl } from '@/lib/api';
 import { getOrganizationMembership } from '@/lib/organizations';
@@ -16,11 +20,16 @@ export default async function IncidentDetailsPage({ params }: PageProps<'/[org]/
   const supabase = await createClient();
   const { data: claims, error } = await supabase.auth.getClaims();
   if (error || !claims?.claims) redirect('/login');
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) redirect('/login');
   const url = `${apiBaseUrl}/organizations/${encodeURIComponent(org)}`;
   async function load<T>(path: string): Promise<T> {
-    const response = await fetch(`${url}${path}`, { cache: 'no-store', headers: { Authorization: `Bearer ${session!.access_token}` } });
+    const response = await fetch(`${url}${path}`, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${session!.access_token}` },
+    });
     if (response.status === 401) redirect('/login');
     if (response.status === 404) notFound();
     if (!response.ok) throw new Error('Unable to load incident details.');
@@ -32,5 +41,14 @@ export default async function IncidentDetailsPage({ params }: PageProps<'/[org]/
     load<ServiceResponse[]>('/services'),
     canManage ? load<OrganizationMemberResponse[]>('/members') : Promise.resolve([]),
   ]);
-  return <IncidentDetails key={incident.id} orgSlug={org} role={membership.role} incident={incident} services={services} members={members} />;
+  return (
+    <IncidentDetails
+      key={incident.id}
+      orgSlug={org}
+      role={membership.role}
+      incident={incident}
+      services={services}
+      members={members}
+    />
+  );
 }
