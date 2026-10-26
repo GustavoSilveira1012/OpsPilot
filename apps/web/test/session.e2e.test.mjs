@@ -241,7 +241,6 @@ test('ordinary members see ownership without manager controls and outsiders cann
   assert.match(await (await page(path, outsider.cookie())).text(), /Workspace unavailable/);
 });
 
-
 test('incident catalog and detail routes render real API data and enforce workspace isolation', async () => {
   const owner = await signIn();
   const outsider = await signIn();
@@ -278,6 +277,12 @@ test('incident catalog and detail routes render real API data and enforce worksp
   assert.equal(note.status, 201);
   const refreshed = await page(`/${organization.slug}/incidents/${incident.id}`, owner.cookie());
   assert.match(await refreshed.text(), /Service restored in test environment/);
-  assert.match(await (await page(`/${organization.slug}/incidents`, outsider.cookie())).text(), /Workspace unavailable/);
-  assert.match(await (await page(`/${organization.slug}/incidents/${incident.id}`, outsider.cookie())).text(), /Workspace unavailable/);
+  assert.match(
+    await (await page(`/${organization.slug}/incidents`, outsider.cookie())).text(),
+    /Workspace unavailable/,
+  );
+  assert.match(
+    await (await page(`/${organization.slug}/incidents/${incident.id}`, outsider.cookie())).text(),
+    /Workspace unavailable/,
+  );
 });
