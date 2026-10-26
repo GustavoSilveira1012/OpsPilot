@@ -45,6 +45,7 @@ export default async function IncidentsPage({ params }: PageProps<'/[org]/incide
   }
   return (
     <IncidentCatalog
+      key={`${incidents.total}:${incidents.items[0]?.id ?? ''}`}
       orgSlug={org}
       orgName={membership.organization.name}
       role={membership.role}
