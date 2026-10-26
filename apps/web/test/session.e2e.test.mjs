@@ -252,7 +252,7 @@ test('incident catalog and detail routes render real API data and enforce worksp
   };
   const empty = await page(`/${organization.slug}/incidents`, owner.cookie());
   assert.equal(empty.status, 200);
-  assert.match(await empty.text(), /Create incident/);
+  assert.match(await empty.text(), /New incident/);
   const response = await fetch(base, {
     method: 'POST',
     headers,
