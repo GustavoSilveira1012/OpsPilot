@@ -24,7 +24,7 @@ function ApiStatus() {
     const [connection, setConnection] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$4$2e$2_$40$babel$2b$core$40$7$2e$2_7a0d28a2466cf1890b30b9b40bf43cfc$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])({
         status: 'checking'
     });
-    const apiBaseUrl = ("TURBOPACK compile-time value", "http://localhost:3001/api/v1") ?? 'http://localhost:3001/api/v1';
+    const apiBaseUrl = ("TURBOPACK compile-time value", "http://127.0.0.1:3101/api/v1") ?? 'http://localhost:3001/api/v1';
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$4$2e$2_$40$babel$2b$core$40$7$2e$2_7a0d28a2466cf1890b30b9b40bf43cfc$2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ApiStatus.useEffect": ()=>{
             const controller = new AbortController();

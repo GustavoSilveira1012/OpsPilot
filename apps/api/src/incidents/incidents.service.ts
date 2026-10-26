@@ -3,6 +3,7 @@ import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nest
 import type {
   IncidentDetailResponse,
   IncidentListResponse,
+  IncidentResponderResponse,
   IncidentResponse,
 } from '@opspilot/contracts';
 
@@ -10,6 +11,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateIncidentDto } from './create-incident.dto.js';
 import type { ListIncidentsDto } from './list-incidents.dto.js';
+import type { UpdateIncidentDto } from './update-incident.dto.js';
 
 const incidentFields = {
   id: true,
@@ -73,6 +75,204 @@ export class IncidentsService {
     }
 
     return membership;
+  }
+
+  private async lockIncident(
+    organizationId: string,
+    incidentId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+      SELECT id
+      FROM incidents
+      WHERE id = ${incidentId}::uuid
+        AND organization_id = ${organizationId}::uuid
+      FOR UPDATE
+    `,
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Incident not found.');
+    }
+  }
+
+  async listResponders(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+  ): Promise<IncidentResponderResponse[]> {
+    const member = await this.membership(userId, orgSlug);
+
+    const incident = await this.prisma.incident.findFirst({
+      where: {
+        id: incidentId,
+        organizationId: member.organizationId,
+      },
+      select: { id: true },
+    });
+
+    if (!incident) {
+      throw new NotFoundException('Incident not found.');
+    }
+
+    const responders = await this.prisma.incidentResponder.findMany({
+      where: {
+        organizationId: member.organizationId,
+        incidentId,
+        removedAt: null,
+        responder: {
+          status: 'ACTIVE',
+          user: { deactivatedAt: null },
+        },
+      },
+      select: {
+        userId: true,
+        assignedAt: true,
+        assignedByUserId: true,
+        responder: {
+          select: {
+            role: true,
+            user: {
+              select: {
+                displayName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ assignedAt: 'asc' }, { userId: 'asc' }],
+    });
+
+    return responders.map((responder) => ({
+      userId: responder.userId,
+      displayName: responder.responder.user.displayName,
+      email: responder.responder.user.email,
+      role: responder.responder.role,
+      assignedAt: responder.assignedAt.toISOString(),
+      assignedByUserId: responder.assignedByUserId,
+    }));
+  }
+
+  async assignResponder(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot manage incident responders.');
+      }
+
+      await this.lockIncident(member.organizationId, incidentId, tx);
+
+      const target = await tx.membership.findFirst({
+        where: {
+          organizationId: member.organizationId,
+          userId: targetUserId,
+          status: 'ACTIVE',
+          user: { deactivatedAt: null },
+        },
+        select: { userId: true },
+      });
+
+      if (!target) {
+        throw new NotFoundException('Active organization member not found.');
+      }
+
+      const key = {
+        organizationId: member.organizationId,
+        incidentId,
+        userId: targetUserId,
+      };
+
+      const existing = await tx.incidentResponder.findUnique({
+        where: {
+          organizationId_incidentId_userId: key,
+        },
+      });
+
+      // Assigning an active responder twice is a no-op.
+      if (existing && existing.removedAt === null) return;
+
+      const now = new Date();
+
+      await tx.incidentResponder.upsert({
+        where: {
+          organizationId_incidentId_userId: key,
+        },
+        create: {
+          ...key,
+          assignedByUserId: userId,
+          assignedAt: now,
+        },
+        update: {
+          removedAt: null,
+          assignedByUserId: userId,
+          assignedAt: now,
+        },
+      });
+
+      await tx.incidentEvent.create({
+        data: {
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'RESPONDER_ASSIGNED',
+          details: {
+            userId: targetUserId,
+          },
+        },
+      });
+    });
+  }
+
+  async removeResponder(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot manage incident responders.');
+      }
+
+      await this.lockIncident(member.organizationId, incidentId, tx);
+
+      const result = await tx.incidentResponder.updateMany({
+        where: {
+          organizationId: member.organizationId,
+          incidentId,
+          userId: targetUserId,
+          removedAt: null,
+        },
+        data: {
+          removedAt: new Date(),
+        },
+      });
+
+      // Removing an absent responder is also idempotent.
+      if (result.count === 0) return;
+
+      await tx.incidentEvent.create({
+        data: {
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'RESPONDER_REMOVED',
+          details: {
+            userId: targetUserId,
+          },
+        },
+      });
+    });
   }
 
   async create(userId: string, orgSlug: string, dto: CreateIncidentDto): Promise<IncidentResponse> {
@@ -179,6 +379,160 @@ export class IncidentsService {
     };
   }
 
+  async update(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    dto: UpdateIncidentDto,
+  ): Promise<IncidentResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN') {
+        throw new ForbiddenException('You cannot update incidents.');
+      }
+
+      await this.lockIncident(member.organizationId, incidentId, tx);
+
+      const current = await tx.incident.findFirst({
+        where: {
+          id: incidentId,
+          organizationId: member.organizationId,
+        },
+        select: incidentFields,
+      });
+
+      if (!current) {
+        throw new NotFoundException('Incident not found.');
+      }
+
+      const statusChanged = dto.status !== undefined && dto.status !== current.status;
+      const severityChanged = dto.severity !== undefined && dto.severity !== current.severity;
+      const summaryChanged = dto.summary !== undefined && dto.summary !== current.summary;
+      const serviceChanged = dto.serviceId !== undefined && dto.serviceId !== current.serviceId;
+
+      if (serviceChanged && dto.serviceId) {
+        const services = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id
+          FROM services
+          WHERE id = ${dto.serviceId}::uuid
+            AND organization_id = ${member.organizationId}::uuid
+            AND archived_at IS NULL
+          FOR UPDATE
+        `);
+
+        if (services.length === 0) {
+          throw new NotFoundException('Service not found.');
+        }
+      }
+
+      if (!statusChanged && !severityChanged && !summaryChanged && !serviceChanged) {
+        return toResponse(current);
+      }
+
+      const now = new Date();
+      const events: Prisma.IncidentEventCreateManyInput[] = [];
+
+      if (statusChanged) {
+        events.push({
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'STATUS_CHANGED',
+          occurredAt: now,
+          details: {
+            from: current.status,
+            to: dto.status!,
+          },
+        });
+      }
+
+      if (severityChanged) {
+        events.push({
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'SEVERITY_CHANGED',
+          occurredAt: now,
+          details: {
+            from: current.severity,
+            to: dto.severity!,
+          },
+        });
+      }
+
+      if (summaryChanged) {
+        events.push({
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'DESCRIPTION_UPDATED',
+          occurredAt: now,
+          details: {
+            summary: dto.summary,
+          },
+        });
+      }
+
+      if (serviceChanged) {
+        if (current.serviceId) {
+          events.push({
+            organizationId: member.organizationId,
+            incidentId,
+            actorUserId: userId,
+            type: 'SERVICE_UNLINKED',
+            occurredAt: now,
+            details: {
+              serviceId: current.serviceId,
+            },
+          });
+        }
+
+        if (dto.serviceId) {
+          events.push({
+            organizationId: member.organizationId,
+            incidentId,
+            actorUserId: userId,
+            type: 'SERVICE_LINKED',
+            occurredAt: now,
+            details: {
+              serviceId: dto.serviceId,
+            },
+          });
+        }
+      }
+
+      const updated = await tx.incident.update({
+        where: {
+          organizationId_id: {
+            organizationId: member.organizationId,
+            id: incidentId,
+          },
+        },
+        data: {
+          ...(statusChanged
+            ? {
+                status: dto.status,
+                resolvedAt: dto.status === 'RESOLVED' ? now : null,
+              }
+            : {}),
+          ...(severityChanged ? { severity: dto.severity } : {}),
+          ...(summaryChanged ? { summary: dto.summary } : {}),
+          ...(serviceChanged ? { serviceId: dto.serviceId } : {}),
+        },
+        select: incidentFields,
+      });
+
+      for (const event of events) {
+        await tx.incidentEvent.create({
+          data: event,
+        });
+      }
+
+      return toResponse(updated);
+    });
+  }
+
   async getById(
     userId: string,
     orgSlug: string,
@@ -202,7 +556,7 @@ export class IncidentsService {
             details: true,
             occurredAt: true,
           },
-          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          orderBy: { sequence: 'asc' },
         },
       },
     });

@@ -216,6 +216,8 @@ model IncidentEvent {
   type           IncidentEventType
   message        String?           @db.Text
   details        Json?             @db.JsonB
+  sequence BigInt @unique @default(autoincrement())
+  @@index([organizationId, incidentId, sequence])
   occurredAt     DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(6)
   createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   incident       Incident          @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Restrict)

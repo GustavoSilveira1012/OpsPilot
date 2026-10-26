@@ -18,6 +18,13 @@ export interface OrganizationSummary {
   readonly slug: string;
 }
 
+export interface UpdateIncidentRequest {
+  status?: IncidentStatus;
+  severity?: IncidentSeverity;
+  summary?: string | null;
+  serviceId?: string | null;
+}
+
 export interface OrganizationMembershipResponse {
   readonly organization: OrganizationSummary;
   readonly role: OrganizationRole;
@@ -120,4 +127,11 @@ export interface OrganizationMemberResponse {
 
 export interface ServiceOwnerResponse extends OrganizationMemberResponse {
   assignedAt: string;
+}
+
+
+export interface IncidentResponderResponse
+  extends OrganizationMemberResponse {
+  assignedAt: string;
+  assignedByUserId: string | null;
 }
