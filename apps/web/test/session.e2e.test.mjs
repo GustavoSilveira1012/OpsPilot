@@ -240,3 +240,44 @@ test('ordinary members see ownership without manager controls and outsiders cann
   assert.ok(!html.includes('Archive service'));
   assert.match(await (await page(path, outsider.cookie())).text(), /Workspace unavailable/);
 });
+
+
+test('incident catalog and detail routes render real API data and enforce workspace isolation', async () => {
+  const owner = await signIn();
+  const outsider = await signIn();
+  const organization = await createWorkspace(owner);
+  const base = `${api}/organizations/${organization.slug}/incidents`;
+  const headers = {
+    Authorization: `Bearer ${owner.token}`,
+    'Content-Type': 'application/json',
+  };
+  const empty = await page(`/${organization.slug}/incidents`, owner.cookie());
+  assert.equal(empty.status, 200);
+  assert.match(await empty.text(), /Create incident/);
+  const response = await fetch(base, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ title: 'Platform integration incident', severity: 'SEV2' }),
+  });
+  assert.equal(response.status, 201);
+  const incident = await response.json();
+  const catalog = await page(`/${organization.slug}/incidents`, owner.cookie());
+  assert.equal(catalog.status, 200);
+  assert.match(await catalog.text(), /Platform integration incident/);
+  const details = await page(`/${organization.slug}/incidents/${incident.id}`, owner.cookie());
+  assert.equal(details.status, 200);
+  const html = await details.text();
+  assert.match(html, /Activity timeline/);
+  assert.match(html, /Update incident/);
+  assert.match(html, /Platform integration incident/);
+  const note = await fetch(`${base}/${incident.id}/notes`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message: 'Service restored in test environment' }),
+  });
+  assert.equal(note.status, 201);
+  const refreshed = await page(`/${organization.slug}/incidents/${incident.id}`, owner.cookie());
+  assert.match(await refreshed.text(), /Service restored in test environment/);
+  assert.match(await (await page(`/${organization.slug}/incidents`, outsider.cookie())).text(), /Workspace unavailable/);
+  assert.match(await (await page(`/${organization.slug}/incidents/${incident.id}`, outsider.cookie())).text(), /Workspace unavailable/);
+});
