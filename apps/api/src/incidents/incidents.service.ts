@@ -221,7 +221,7 @@ export class IncidentsService {
             details: true,
             occurredAt: true,
           },
-          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          orderBy: { sequence: 'asc' },
         },
       },
     });
@@ -351,7 +351,7 @@ export class IncidentsService {
         },
         select: incidentFields,
       });
-      await tx.incidentEvent.createMany({ data: events });
+      for (const event of events) await tx.incidentEvent.create({ data: event });
       return toResponse(updated);
     });
   }
