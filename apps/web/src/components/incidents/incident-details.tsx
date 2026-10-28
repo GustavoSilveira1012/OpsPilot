@@ -7,12 +7,14 @@ import type {
   IncidentDetailResponse,
   IncidentEventResponse,
   IncidentSeverity,
+  IncidentResponderResponse,
   IncidentStatus,
   OrganizationMemberResponse,
   OrganizationRole,
   ServiceResponse,
   UpdateIncidentRequest,
 } from '@opspilot/contracts';
+import { IncidentResponders } from './incident-responders';
 import { apiBaseUrl, readApiError } from '@/lib/api';
 import { createClient } from '@/lib/supabase/client';
 import styles from '@/components/services/service-details.module.css';
@@ -23,6 +25,7 @@ type Props = {
   incident: IncidentDetailResponse;
   services: ServiceResponse[];
   members: OrganizationMemberResponse[];
+  responders: IncidentResponderResponse[];
 };
 const statuses: IncidentStatus[] = ['INVESTIGATING', 'IDENTIFIED', 'MONITORING', 'RESOLVED'];
 const severities: IncidentSeverity[] = ['SEV1', 'SEV2', 'SEV3', 'SEV4'];
@@ -38,7 +41,7 @@ function time(value: string) {
 function readable(value: string) {
   return value.replaceAll('_', ' ').toLowerCase();
 }
-export function IncidentDetails({ orgSlug, role, incident, services, members }: Props) {
+export function IncidentDetails({ orgSlug, role, incident, services, members, responders }: Props) {
   const router = useRouter();
   const canManage = role === 'OWNER' || role === 'ADMIN';
   const [pending, startTransition] = useTransition();
@@ -46,6 +49,7 @@ export function IncidentDetails({ orgSlug, role, incident, services, members }: 
   const [status, setStatus] = useState<IncidentStatus>(incident.status);
   const [severity, setSeverity] = useState<IncidentSeverity>(incident.severity);
   const [summary, setSummary] = useState(incident.summary || '');
+  const [linkedService, setLinkedService] = useState(incident.serviceId ?? '');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -99,6 +103,7 @@ export function IncidentDetails({ orgSlug, role, incident, services, members }: 
     if (status !== incident.status) payload.status = status;
     if (severity !== incident.severity) payload.severity = severity;
     if ((summary.trim() || null) !== incident.summary) payload.summary = summary.trim() || null;
+    if (linkedService !== (incident.serviceId ?? '')) payload.serviceId = linkedService || null;
     if (Object.keys(payload).length === 0) {
       setSuccess('No changes to save.');
       return;
@@ -207,6 +212,13 @@ export function IncidentDetails({ orgSlug, role, incident, services, members }: 
             </label>
           </div>
           <label className={styles.field}>
+            Affected service
+            <select value={linkedService} disabled={busy} onChange={event => setLinkedService(event.target.value)}>
+              <option value="">No service</option>
+              {services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>
             Summary
             <textarea
               rows={4}
@@ -223,6 +235,7 @@ export function IncidentDetails({ orgSlug, role, incident, services, members }: 
           </div>
         </form>
       )}
+      <IncidentResponders orgSlug={orgSlug} incidentId={incident.id} role={role} responders={responders} members={members} />
       <section className={styles.panel} aria-labelledby="incident-timeline">
         <h2 id="incident-timeline">Activity timeline</h2>
         <ol>
@@ -256,10 +269,6 @@ export function IncidentDetails({ orgSlug, role, incident, services, members }: 
           </div>
         </form>
       </section>
-      <p className={styles.note}>
-        Incident responder assignments and changing the affected service will be enabled once the
-        OPS-005E endpoints are available in the merged API.
-      </p>
     </section>
   );
 }
