@@ -19,8 +19,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Format all OPS-007 files
         run: |
-          pnpm exec prettier --write apps/api/src/incidents/incidents.controller.ts apps/api/src/incidents/incidents.service.ts apps/api/src/incidents/update-incident.dto.ts apps/api/prisma/schema.prisma apps/api/test/incidents.e2e.test.mjs apps/web/src/components/incidents/incident-details.tsx apps/web/src/components/incidents/incident-responders.tsx "apps/web/src/app/(platform)/[org]/incidents/[id]/page.tsx" packages/contracts/src/index.ts docs/ops-007.md
-          git add apps/api/src/incidents/incidents.controller.ts apps/api/src/incidents/incidents.service.ts apps/api/src/incidents/update-incident.dto.ts apps/api/prisma/schema.prisma apps/api/test/incidents.e2e.test.mjs apps/web/src/components/incidents/incident-details.tsx apps/web/src/components/incidents/incident-responders.tsx "apps/web/src/app/(platform)/[org]/incidents/[id]/page.tsx" packages/contracts/src/index.ts docs/ops-007.md
+          pnpm exec prettier --write apps/api/src/incidents/incidents.controller.ts apps/api/src/incidents/incidents.service.ts apps/api/src/incidents/update-incident.dto.ts apps/api/test/incidents.e2e.test.mjs apps/web/src/components/incidents/incident-details.tsx apps/web/src/components/incidents/incident-responders.tsx "apps/web/src/app/(platform)/[org]/incidents/[id]/page.tsx" packages/contracts/src/index.ts docs/ops-007.md
+          git add apps/api/src/incidents/incidents.controller.ts apps/api/src/incidents/incidents.service.ts apps/api/src/incidents/update-incident.dto.ts apps/api/test/incidents.e2e.test.mjs apps/web/src/components/incidents/incident-details.tsx apps/web/src/components/incidents/incident-responders.tsx "apps/web/src/app/(platform)/[org]/incidents/[id]/page.tsx" packages/contracts/src/index.ts docs/ops-007.md
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
