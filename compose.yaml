@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: opspilot
       POSTGRES_PASSWORD: opspilot_local
     ports:
-      - '55432:5432'
+      - '5432:5432'
     volumes:
       - opspilot-postgres-data:/var/lib/postgresql
     healthcheck:
