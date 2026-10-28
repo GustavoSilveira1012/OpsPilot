@@ -16,6 +16,10 @@ export function WorkspaceNav({ slug }: { slug: string }) {
       label: 'Services',
       href: `/${slug}/services`,
     },
+    {
+      label: 'Incidents',
+      href: `/${slug}/incidents`,
+    },
   ];
 
   return (
