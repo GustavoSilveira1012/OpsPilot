@@ -258,7 +258,6 @@ test('inactive members cannot create or add timeline notes', async () => {
   );
 });
 
-
 test('responder assignments are tenant-scoped, idempotent and audited', async () => {
   const f = await fixture();
   const created = await request('POST', f.base, f.owner, { title: 'Responder assignment case' });
@@ -277,9 +276,10 @@ test('responder assignments are tenant-scoped, idempotent and audited', async ()
   assert.equal((await request('DELETE', target, f.owner)).status, 204);
   assert.equal((await request('DELETE', target, f.owner)).status, 204);
   const detail = await (await request('GET', `${f.base}/${id}`, f.owner)).json();
-  assert.deepEqual(detail.timeline.map(x => x.type), [
-    'INCIDENT_CREATED', 'RESPONDER_ASSIGNED', 'RESPONDER_REMOVED',
-  ]);
+  assert.deepEqual(
+    detail.timeline.map((x) => x.type),
+    ['INCIDENT_CREATED', 'RESPONDER_ASSIGNED', 'RESPONDER_REMOVED'],
+  );
 });
 
 test('linking and unlinking services validates tenant scope and appends ordered events', async () => {
@@ -297,9 +297,10 @@ test('linking and unlinking services validates tenant scope and appends ordered 
   assert.equal(unlinked.status, 200);
   assert.equal((await unlinked.json()).serviceId, null);
   const timeline = (await (await request('GET', path, f.owner)).json()).timeline;
-  assert.deepEqual(timeline.map(event => event.type), [
-    'INCIDENT_CREATED', 'SERVICE_LINKED', 'SERVICE_UNLINKED',
-  ]);
+  assert.deepEqual(
+    timeline.map((event) => event.type),
+    ['INCIDENT_CREATED', 'SERVICE_LINKED', 'SERVICE_UNLINKED'],
+  );
   const rows = await prisma.incidentEvent.findMany({
     where: { incidentId: id },
     orderBy: { sequence: 'asc' },
@@ -310,11 +311,16 @@ test('linking and unlinking services validates tenant scope and appends ordered 
 
 test('suspended responders cannot be newly assigned', async () => {
   const f = await fixture();
-  const incidentResponse = await request('POST', f.base, f.owner, { title: 'Suspended responder validation' });
+  const incidentResponse = await request('POST', f.base, f.owner, {
+    title: 'Suspended responder validation',
+  });
   const { id } = await incidentResponse.json();
   await prisma.membership.update({
     where: { organizationId_userId: { organizationId: f.organization.id, userId: f.member } },
     data: { status: 'SUSPENDED' },
   });
-  assert.equal((await request('PUT', `${f.base}/${id}/responders/${f.member}`, f.owner)).status, 404);
+  assert.equal(
+    (await request('PUT', `${f.base}/${id}/responders/${f.member}`, f.owner)).status,
+    404,
+  );
 });

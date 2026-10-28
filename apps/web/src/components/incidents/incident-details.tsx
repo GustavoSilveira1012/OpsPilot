@@ -213,9 +213,17 @@ export function IncidentDetails({ orgSlug, role, incident, services, members, re
           </div>
           <label className={styles.field}>
             Affected service
-            <select value={linkedService} disabled={busy} onChange={event => setLinkedService(event.target.value)}>
+            <select
+              value={linkedService}
+              disabled={busy}
+              onChange={(event) => setLinkedService(event.target.value)}
+            >
               <option value="">No service</option>
-              {services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.name}
+                </option>
+              ))}
             </select>
           </label>
           <label className={styles.field}>
@@ -235,7 +243,13 @@ export function IncidentDetails({ orgSlug, role, incident, services, members, re
           </div>
         </form>
       )}
-      <IncidentResponders orgSlug={orgSlug} incidentId={incident.id} role={role} responders={responders} members={members} />
+      <IncidentResponders
+        orgSlug={orgSlug}
+        incidentId={incident.id}
+        role={role}
+        responders={responders}
+        members={members}
+      />
       <section className={styles.panel} aria-labelledby="incident-timeline">
         <h2 id="incident-timeline">Activity timeline</h2>
         <ol>
