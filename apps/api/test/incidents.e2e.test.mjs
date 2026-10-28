@@ -257,3 +257,64 @@ test('inactive members cannot create or add timeline notes', async () => {
     404,
   );
 });
+
+
+test('responder assignments are tenant-scoped, idempotent and audited', async () => {
+  const f = await fixture();
+  const created = await request('POST', f.base, f.owner, { title: 'Responder assignment case' });
+  assert.equal(created.status, 201);
+  const { id } = await created.json();
+  const route = `${f.base}/${id}/responders`;
+  const target = `${route}/${f.member}`;
+  assert.equal((await request('PUT', target, f.member)).status, 403);
+  assert.equal((await request('PUT', `${route}/${f.outsider}`, f.owner)).status, 404);
+  assert.equal((await request('PUT', target, f.owner)).status, 204);
+  assert.equal((await request('PUT', target, f.owner)).status, 204);
+  const response = await request('GET', route, f.member);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).length, 1);
+  assert.equal((await request('GET', route, f.outsider)).status, 404);
+  assert.equal((await request('DELETE', target, f.owner)).status, 204);
+  assert.equal((await request('DELETE', target, f.owner)).status, 204);
+  const detail = await (await request('GET', `${f.base}/${id}`, f.owner)).json();
+  assert.deepEqual(detail.timeline.map(x => x.type), [
+    'INCIDENT_CREATED', 'RESPONDER_ASSIGNED', 'RESPONDER_REMOVED',
+  ]);
+});
+
+test('linking and unlinking services validates tenant scope and appends ordered events', async () => {
+  const f = await fixture();
+  const created = await request('POST', f.base, f.owner, { title: 'Service reassignment case' });
+  assert.equal(created.status, 201);
+  const { id } = await created.json();
+  const path = `${f.base}/${id}`;
+  assert.equal((await request('PATCH', path, f.member, { serviceId: f.service.id })).status, 403);
+  assert.equal((await request('PATCH', path, f.owner, { serviceId: randomUUID() })).status, 404);
+  const linked = await request('PATCH', path, f.owner, { serviceId: f.service.id });
+  assert.equal(linked.status, 200);
+  assert.equal((await linked.json()).serviceId, f.service.id);
+  const unlinked = await request('PATCH', path, f.owner, { serviceId: null });
+  assert.equal(unlinked.status, 200);
+  assert.equal((await unlinked.json()).serviceId, null);
+  const timeline = (await (await request('GET', path, f.owner)).json()).timeline;
+  assert.deepEqual(timeline.map(event => event.type), [
+    'INCIDENT_CREATED', 'SERVICE_LINKED', 'SERVICE_UNLINKED',
+  ]);
+  const rows = await prisma.incidentEvent.findMany({
+    where: { incidentId: id },
+    orderBy: { sequence: 'asc' },
+    select: { sequence: true },
+  });
+  assert.ok(rows.every((row, index) => index === 0 || row.sequence > rows[index - 1].sequence));
+});
+
+test('suspended responders cannot be newly assigned', async () => {
+  const f = await fixture();
+  const incidentResponse = await request('POST', f.base, f.owner, { title: 'Suspended responder validation' });
+  const { id } = await incidentResponse.json();
+  await prisma.membership.update({
+    where: { organizationId_userId: { organizationId: f.organization.id, userId: f.member } },
+    data: { status: 'SUSPENDED' },
+  });
+  assert.equal((await request('PUT', `${f.base}/${id}/responders/${f.member}`, f.owner)).status, 404);
+});
