@@ -1,6 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
+  Put,
+  HttpCode,
+  HttpStatus,
   Get,
   Header,
   Inject,
@@ -18,6 +22,7 @@ import type {
   IncidentListResponse,
   IncidentResponse,
   IncidentEventResponse,
+  IncidentResponderResponse,
 } from '@opspilot/contracts';
 
 import type { AuthenticatedRequest } from '../auth/supabase-auth.guard.js';
@@ -97,5 +102,36 @@ export class IncidentsController {
     @Body(notePipe) dto: CreateIncidentNoteDto,
   ): Promise<IncidentEventResponse> {
     return this.incidents.addNote(request.user!.id, orgSlug, id, dto);
+  }
+  @Get(':id/responders')
+  @Header('Cache-Control', 'private, no-store')
+  listResponders(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<IncidentResponderResponse[]> {
+    return this.incidents.listResponders(request.user!.id, orgSlug, id);
+  }
+
+  @Put(':id/responders/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async assignResponder(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<void> {
+    await this.incidents.assignResponder(request.user!.id, orgSlug, id, targetUserId);
+  }
+
+  @Delete(':id/responders/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeResponder(
+    @Req() request: AuthenticatedRequest,
+    @Param('orgSlug') orgSlug: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) targetUserId: string,
+  ): Promise<void> {
+    await this.incidents.removeResponder(request.user!.id, orgSlug, id, targetUserId);
   }
 }
