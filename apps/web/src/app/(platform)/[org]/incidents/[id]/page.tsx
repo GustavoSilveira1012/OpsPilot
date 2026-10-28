@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import type {
   IncidentDetailResponse,
   OrganizationMemberResponse,
+  IncidentResponderResponse,
   ServiceResponse,
 } from '@opspilot/contracts';
 import { IncidentDetails } from '@/components/incidents/incident-details';
@@ -36,10 +37,11 @@ export default async function IncidentDetailsPage({ params }: PageProps<'/[org]/
     return (await response.json()) as T;
   }
   const canManage = membership.role === 'OWNER' || membership.role === 'ADMIN';
-  const [incident, services, members] = await Promise.all([
+  const [incident, services, members, responders] = await Promise.all([
     load<IncidentDetailResponse>(`/incidents/${encodeURIComponent(id)}`),
     load<ServiceResponse[]>('/services'),
     canManage ? load<OrganizationMemberResponse[]>('/members') : Promise.resolve([]),
+    load<IncidentResponderResponse[]>(`/incidents/${encodeURIComponent(id)}/responders`),
   ]);
   return (
     <IncidentDetails
@@ -49,6 +51,7 @@ export default async function IncidentDetailsPage({ params }: PageProps<'/[org]/
       incident={incident}
       services={services}
       members={members}
+      responders={responders}
     />
   );
 }

@@ -13,6 +13,7 @@ import type {
   IncidentResponse,
   IncidentStatus,
   IncidentEventResponse,
+  IncidentResponderResponse,
 } from '@opspilot/contracts';
 
 import { Prisma } from '../generated/prisma/client.js';
@@ -220,7 +221,7 @@ export class IncidentsService {
             details: true,
             occurredAt: true,
           },
-          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          orderBy: { sequence: 'asc' },
         },
       },
     });
@@ -277,7 +278,18 @@ export class IncidentsService {
       if (statusChanged && !transitions[current.status].includes(dto.status!)) {
         throw new ConflictException('Invalid incident status transition.');
       }
-      if (!statusChanged && !severityChanged && !summaryChanged) return toResponse(current);
+      const serviceChanged = dto.serviceId !== undefined && dto.serviceId !== current.serviceId;
+      if (serviceChanged && dto.serviceId) {
+        const linked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id FROM services
+          WHERE id = ${dto.serviceId}::uuid
+            AND organization_id = ${member.organizationId}::uuid
+            AND archived_at IS NULL FOR UPDATE
+        `);
+        if (!linked.length) throw new NotFoundException('Service not found.');
+      }
+      if (!statusChanged && !severityChanged && !summaryChanged && !serviceChanged)
+        return toResponse(current);
 
       const now = new Date();
       const events: Prisma.IncidentEventCreateManyInput[] = [];
@@ -311,6 +323,26 @@ export class IncidentsService {
           details: { previous: current.summary, next: dto.summary },
         });
       }
+      if (serviceChanged) {
+        if (current.serviceId)
+          events.push({
+            organizationId: member.organizationId,
+            incidentId,
+            actorUserId: userId,
+            type: 'SERVICE_UNLINKED',
+            occurredAt: now,
+            details: { serviceId: current.serviceId },
+          });
+        if (dto.serviceId)
+          events.push({
+            organizationId: member.organizationId,
+            incidentId,
+            actorUserId: userId,
+            type: 'SERVICE_LINKED',
+            occurredAt: now,
+            details: { serviceId: dto.serviceId },
+          });
+      }
       const updated = await tx.incident.update({
         where: {
           organizationId_id: { organizationId: member.organizationId, id: incidentId },
@@ -324,10 +356,11 @@ export class IncidentsService {
             : {}),
           ...(severityChanged ? { severity: dto.severity! } : {}),
           ...(summaryChanged ? { summary: dto.summary } : {}),
+          ...(serviceChanged ? { serviceId: dto.serviceId } : {}),
         },
         select: incidentFields,
       });
-      await tx.incidentEvent.createMany({ data: events });
+      for (const event of events) await tx.incidentEvent.create({ data: event });
       return toResponse(updated);
     });
   }
@@ -368,6 +401,130 @@ export class IncidentsService {
         ...created,
         occurredAt: created.occurredAt.toISOString(),
       };
+    });
+  }
+  private async lockIncident(
+    orgId: string,
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id FROM incidents WHERE id = ${id}::uuid
+        AND organization_id = ${orgId}::uuid FOR UPDATE
+    `);
+    if (!rows.length) throw new NotFoundException('Incident not found.');
+  }
+
+  async listResponders(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+  ): Promise<IncidentResponderResponse[]> {
+    const member = await this.membership(userId, orgSlug);
+    const incident = await this.prisma.incident.findFirst({
+      where: { id: incidentId, organizationId: member.organizationId },
+      select: { id: true },
+    });
+    if (!incident) throw new NotFoundException('Incident not found.');
+    const result = await this.prisma.incidentResponder.findMany({
+      where: {
+        organizationId: member.organizationId,
+        incidentId,
+        removedAt: null,
+        responder: { status: 'ACTIVE', user: { deactivatedAt: null } },
+      },
+      select: {
+        userId: true,
+        assignedAt: true,
+        assignedByUserId: true,
+        responder: { select: { role: true, user: { select: { displayName: true, email: true } } } },
+      },
+      orderBy: [{ assignedAt: 'asc' }, { userId: 'asc' }],
+    });
+    return result.map((x) => ({
+      userId: x.userId,
+      role: x.responder.role,
+      displayName: x.responder.user.displayName,
+      email: x.responder.user.email,
+      assignedAt: x.assignedAt.toISOString(),
+      assignedByUserId: x.assignedByUserId,
+    }));
+  }
+
+  async assignResponder(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN')
+        throw new ForbiddenException('You cannot manage incident responders.');
+      await this.lockIncident(member.organizationId, incidentId, tx);
+      const target = await tx.membership.findFirst({
+        where: {
+          organizationId: member.organizationId,
+          userId: targetUserId,
+          status: 'ACTIVE',
+          user: { deactivatedAt: null },
+        },
+        select: { userId: true },
+      });
+      if (!target) throw new NotFoundException('Active organization member not found.');
+      const key = { organizationId: member.organizationId, incidentId, userId: targetUserId };
+      const previous = await tx.incidentResponder.findUnique({
+        where: { organizationId_incidentId_userId: key },
+      });
+      if (previous && !previous.removedAt) return;
+      const now = new Date();
+      await tx.incidentResponder.upsert({
+        where: { organizationId_incidentId_userId: key },
+        create: { ...key, assignedAt: now, assignedByUserId: userId },
+        update: { removedAt: null, assignedAt: now, assignedByUserId: userId },
+      });
+      await tx.incidentEvent.create({
+        data: {
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'RESPONDER_ASSIGNED',
+          details: { userId: targetUserId },
+        },
+      });
+    });
+  }
+
+  async removeResponder(
+    userId: string,
+    orgSlug: string,
+    incidentId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const member = await this.membership(userId, orgSlug, tx);
+      if (member.role !== 'OWNER' && member.role !== 'ADMIN')
+        throw new ForbiddenException('You cannot manage incident responders.');
+      await this.lockIncident(member.organizationId, incidentId, tx);
+      const result = await tx.incidentResponder.updateMany({
+        where: {
+          organizationId: member.organizationId,
+          incidentId,
+          userId: targetUserId,
+          removedAt: null,
+        },
+        data: { removedAt: new Date() },
+      });
+      if (!result.count) return;
+      await tx.incidentEvent.create({
+        data: {
+          organizationId: member.organizationId,
+          incidentId,
+          actorUserId: userId,
+          type: 'RESPONDER_REMOVED',
+          details: { userId: targetUserId },
+        },
+      });
     });
   }
 }

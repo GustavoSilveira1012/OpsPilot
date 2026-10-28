@@ -209,6 +209,7 @@ model IncidentResponder {
 }
 
 model IncidentEvent {
+  sequence       BigInt            @unique @default(autoincrement())
   id             String            @id @default(uuid()) @db.Uuid
   organizationId String            @map("organization_id") @db.Uuid
   incidentId     String            @map("incident_id") @db.Uuid
@@ -221,6 +222,7 @@ model IncidentEvent {
   incident       Incident          @relation(fields: [organizationId, incidentId], references: [organizationId, id], onDelete: Restrict)
   actor          Membership?       @relation("IncidentEventActor", fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
 
+  @@index([organizationId, incidentId, sequence])
   @@index([organizationId, incidentId, occurredAt, id])
   @@index([organizationId, actorUserId, occurredAt])
   @@map("incident_events")
