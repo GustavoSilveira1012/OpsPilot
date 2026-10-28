@@ -90,6 +90,7 @@ export interface UpdateIncidentRequest {
   status?: IncidentStatus;
   severity?: IncidentSeverity;
   summary?: string | null;
+  serviceId?: string | null;
 }
 export interface CreateIncidentNoteRequest {
   message: string;
@@ -122,4 +123,9 @@ export interface IncidentDetailResponse extends IncidentResponse {
 export interface IncidentListResponse {
   items: IncidentResponse[];
   total: number;
+}
+
+export interface IncidentResponderResponse extends OrganizationMemberResponse {
+  assignedAt: string;
+  assignedByUserId: string | null;
 }
